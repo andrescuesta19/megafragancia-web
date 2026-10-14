@@ -1,219 +1,39 @@
 /* ==========================================================
-   Mega Fragancia — Lógica de la app v3
-   - Carrito con persistencia (localStorage)
-   - Buscador de productos
-   - Modal de detalle de producto
-   - Botón flotante de WhatsApp
-   - Panel admin completo: promo, productos (CRUD), textos
-   - SVG construido con createElementNS (sin innerHTML inseguro)
+   Mega Fragancia — App con Supabase
+   - Productos, fotos y videos en Supabase (no data.json)
+   - Auth con email/password (Supabase Auth)
+   - Sincronización automática en tiempo real entre dispositivos
+   - Carrito en localStorage (por dispositivo)
    ========================================================== */
 
 (function () {
   'use strict';
 
   // ---------- Configuración ----------
-  var WHATSAPP = '573106399810';
+  var WHATSAPP_DEFAULT = '573106399810';
   var COMBO_PRECIO_DEFAULT = 300000;
-  var DATA_URL = 'data.json';
 
-  // ---------- Sincronización vía Netlify Function ----------
-  // El admin guarda los cambios en data.json que está en el repo.
-  // Esto se hace a través de una Netlify Function que tiene el token seguro.
-  // El cliente solo hace click en "Guardar" y todo se sincroniza automáticamente.
-  //
-  // La función está en /netlify/functions/save-data.js
-  // El token (GITHUB_TOKEN) se configura en Netlify Dashboard → Environment variables
-  // NO se guarda ningún token en el código del repositorio.
+  // ---------- Supabase ----------
+  var cfg = window.SUPABASE_CONFIG || {};
+  var supabase = null;
+  var currentUser = null;
+  var BUCKET = 'media';
 
-  var SYNC_ENDPOINT = '/.netlify/functions/save-data';
-  var ADMIN_PASSWORD = 'mega2026'; // Misma clave que el admin del sitio
-
-  // Sube data.json a GitHub a través de la Netlify Function.
-  function uploadToGitHub(jsonStr, commitMsg) {
-    return fetch(SYNC_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Admin-Password': ADMIN_PASSWORD
-      },
-      body: JSON.stringify({
-        content: jsonStr,
-        message: commitMsg || 'Update data.json from admin'
-      })
-    })
-      .then(function (r) {
-        return r.json().then(function (body) {
-          return { ok: r.ok, status: r.status, body: body };
-        });
-      })
-      .then(function (r) {
-        if (r.ok && r.body && r.body.ok) {
-          return { ok: true };
-        }
-        return { ok: false, error: (r.body && r.body.error) || ('HTTP ' + r.status) };
-      })
-      .catch(function (e) {
-        return { ok: false, error: e.message || 'Error de red' };
-      });
+  function isConfigured() {
+    return cfg && cfg.url && cfg.anonKey &&
+           cfg.url.indexOf('TU-PROYECTO') === -1 &&
+           cfg.anonKey.indexOf('TU-ANON-KEY') === -1;
   }
 
-  // ---------- Helpers de almacenamiento local ----------
-  function loadJSON(key, fallback) {
+  if (isConfigured()) {
     try {
-      var raw = localStorage.getItem(key);
-      if (!raw) return fallback;
-      var p = JSON.parse(raw);
-      return p == null ? fallback : p;
-    } catch (e) { return fallback; }
-  }
-  function saveJSON(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
-  }
-
-  // ---------- Helpers de almacenamiento local ----------
-  function loadJSON(key, fallback) {
-    try {
-      var raw = localStorage.getItem(key);
-      if (!raw) return fallback;
-      var p = JSON.parse(raw);
-      return p == null ? fallback : p;
-    } catch (e) { return fallback; }
-  }
-  function saveJSON(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
-  }
-
-  // ---------- Defaults (usados como fallback si falla la carga de data.json) ----------
-  var PROMO_DEFAULT = {
-    activo: true,
-    titulo: '2× $300.000',
-    subtitulo: 'Combo de octubre',
-    vigencia: 'Cantidad limitada',
-    precio: 300000
-  };
-  var SITE_DEFAULT = {
-    hero_h1: 'Perfumes árabes<br>y de nicho · <em>100% originales</em>',
-    hero_lead: 'Elige tus fragancias, arma tu combo y paga solo cuando lo recibes. Trabajamos directamente con proveedores autorizados y entregamos factura de cada pedido.',
-    nosotros_texto: 'Mega Fragancia es un emprendimiento colombiano dedicado a la curaduría de perfumes árabes y de nicho. Seleccionamos cada fragancia con proveedores autorizados y la probamos antes de ofrecerla, porque sabemos que un buen perfume es una decisión personal.\n\nEstamos en Turbo, Antioquia y enviamos a todo el país. Si quieres conocer la procedencia exacta de cualquier producto, te la mostramos: factura, lote y video del empaque.',
-    instagram: 'https://www.instagram.com/mega.fragancia7/'
-  };
-  var PRODUCTOS_DEFAULT = [
-    { n: 'Ámbar Real', t: 'Unisex', h: 38, img: '', desc: 'Cálido, especiado y envolvente. Ideal para noches frescas.', a: ['Cardamomo', 'Bergamota'], b: ['Ámbar', 'Rosa'], c: ['Vainilla', 'Pachulí'] },
-    { n: 'Oud Nocturno', t: 'Hombre', h: 260, img: '', desc: 'Profundo, ahumado y elegante. Un clásico de la perfumería árabe.', a: ['Azafrán', 'Pimienta'], b: ['Oud', 'Cuero'], c: ['Sándalo', 'Almizcle'] },
-    { n: 'Rosa del Desierto', t: 'Mujer', h: 340, img: '', desc: 'Floral, dulce y sofisticado. Para quien deja huella.', a: ['Frambuesa', 'Litchi'], b: ['Rosa damascena', 'Peonía'], c: ['Almizcle', 'Ámbar'] },
-    { n: 'Noche de Dátil', t: 'Unisex', h: 28, img: '', desc: 'Gourmand, oriental y memorable. Perfecto para regalar.', a: ['Dátil', 'Canela'], b: ['Haba tonka', 'Café'], c: ['Vainilla', 'Madera'] },
-    { n: 'Atlas Fresco', t: 'Hombre', h: 200, img: '', desc: 'Aromático, limpio y versátil. Para el día a día.', a: ['Limón', 'Menta'], b: ['Lavanda', 'Salvia'], c: ['Vetiver', 'Cedro'] },
-    { n: 'Jazmín Dorado', t: 'Mujer', h: 48, img: '', desc: 'Floral blanco, solar y sofisticado. Elegancia en cada nota.', a: ['Mandarina', 'Pera'], b: ['Jazmín', 'Azahar'], c: ['Sándalo', 'Vainilla'] }
-  ];
-
-  // ---------- Estado cargado de data.json ----------
-  var promo = Object.assign({}, PROMO_DEFAULT);
-  var site = Object.assign({}, SITE_DEFAULT);
-  var DATA = PRODUCTOS_DEFAULT.slice();
-
-  function sanitizeProduct(p) {
-    if (!p || typeof p !== 'object') return null;
-    var n = typeof p.n === 'string' ? p.n.slice(0, 60).trim() : '';
-    if (!n) return null;
-    return {
-      n: n,
-      t: ['Hombre', 'Mujer', 'Unisex'].indexOf(p.t) >= 0 ? p.t : 'Unisex',
-      h: Number.isFinite(Number(p.h)) ? Math.max(0, Math.min(360, Number(p.h))) : 38,
-      desc: typeof p.desc === 'string' ? p.desc.slice(0, 200) : '',
-      a: Array.isArray(p.a) ? p.a.slice(0, 6).map(String) : [],
-      b: Array.isArray(p.b) ? p.b.slice(0, 6).map(String) : [],
-      c: Array.isArray(p.c) ? p.c.slice(0, 6).map(String) : [],
-      img: typeof p.img === 'string' ? p.img.slice(0, 500) : '',
-      precio: Number.isFinite(Number(p.precio)) && Number(p.precio) > 0 ? Number(p.precio) : 0,
-      presentacion: typeof p.presentacion === 'string' ? p.presentacion.slice(0, 30) : ''
-    };
-  }
-
-  function applyRemoteData(d) {
-    if (!d || typeof d !== 'object') return;
-    if (d.promo && typeof d.promo === 'object') {
-      promo = {
-        activo: Boolean(d.promo.activo),
-        titulo: typeof d.promo.titulo === 'string' ? d.promo.titulo.slice(0, 40) : PROMO_DEFAULT.titulo,
-        subtitulo: typeof d.promo.subtitulo === 'string' ? d.promo.subtitulo.slice(0, 60) : PROMO_DEFAULT.subtitulo,
-        vigencia: typeof d.promo.vigencia === 'string' ? d.promo.vigencia.slice(0, 60) : PROMO_DEFAULT.vigencia,
-        precio: Number.isFinite(Number(d.promo.precio)) && Number(d.promo.precio) > 0 ? Number(d.promo.precio) : PROMO_DEFAULT.precio
-      };
-    }
-    if (d.site && typeof d.site === 'object') {
-      site = Object.assign({}, SITE_DEFAULT, d.site);
-    }
-    if (Array.isArray(d.productos) && d.productos.length) {
-      var arr = [];
-      d.productos.forEach(function (p) {
-        var s = sanitizeProduct(p);
-        if (s) arr.push(s);
+      supabase = window.supabase.createClient(cfg.url, cfg.anonKey, {
+        auth: { persistSession: true, autoRefreshToken: true }
       });
-      if (arr.length) DATA = arr;
+    } catch (e) {
+      console.error('Error inicializando Supabase:', e);
     }
   }
-
-  // Si el admin ya editó en este navegador, sus cambios están en localStorage.
-  // El admin guarda en localStorage Y en data.json (cuando hay backend).
-  // Aquí priorizamos los cambios locales del admin sobre el data.json remoto.
-  function applyLocalOverrides() {
-    var localPromo = loadJSON('mf_promo', null);
-    if (localPromo && typeof localPromo === 'object') {
-      promo = {
-        activo: Boolean(localPromo.activo),
-        titulo: typeof localPromo.titulo === 'string' ? localPromo.titulo.slice(0, 40) : PROMO_DEFAULT.titulo,
-        subtitulo: typeof localPromo.subtitulo === 'string' ? localPromo.subtitulo.slice(0, 60) : PROMO_DEFAULT.subtitulo,
-        vigencia: typeof localPromo.vigencia === 'string' ? localPromo.vigencia.slice(0, 60) : PROMO_DEFAULT.vigencia,
-        precio: Number.isFinite(Number(localPromo.precio)) && Number(localPromo.precio) > 0 ? Number(localPromo.precio) : PROMO_DEFAULT.precio
-      };
-    }
-    var localSite = loadJSON('mf_site', null);
-    if (localSite && typeof localSite === 'object') {
-      site = Object.assign({}, SITE_DEFAULT, localSite);
-    }
-    var localProducts = loadJSON('mf_products', null);
-    if (Array.isArray(localProducts) && localProducts.length) {
-      var arr = [];
-      localProducts.forEach(function (p) {
-        var s = sanitizeProduct(p);
-        if (s) arr.push(s);
-      });
-      if (arr.length) DATA = arr;
-    }
-  }
-
-  // Carga data.json al iniciar. Si falla, usa defaults.
-  function loadRemote() {
-    return fetch(DATA_URL + '?t=' + Date.now(), { cache: 'no-store' })
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(function (d) { applyRemoteData(d); return true; })
-      .catch(function (e) {
-        console.warn('No se pudo cargar data.json, usando defaults:', e.message);
-        return false;
-      });
-  }
-
-  // Carrito (sigue siendo local — el carrito de un visitante no debe compartirse entre dispositivos)
-  var cart = (function () {
-    var c = loadJSON('mf_cart', {});
-    if (!c || typeof c !== 'object') return {};
-    var out = {};
-    Object.keys(c).forEach(function (k) {
-      var v = Number(c[k]);
-      if (Number.isInteger(v) && v > 0 && v <= 20 && typeof k === 'string' && k.length < 80) {
-        out[k] = v;
-      }
-    });
-    return out;
-  })();
-  function saveCart() { saveJSON('mf_cart', cart); }
-
-  // ---------- Estado UI ----------
-  var active = 'Todos';
-  var search = '';
-  var COMBO_PRECIO = promo.precio || COMBO_PRECIO_DEFAULT;
-  var editingProduct = null;
-  var productToOpen = null;
 
   // ---------- Helpers ----------
   function $(id) { return document.getElementById(id); }
@@ -231,7 +51,7 @@
   }
   function isValidWhatsApp(num) { return /^\d{10,15}$/.test(num); }
 
-  // SVG seguro de frasco
+  // SVG seguro de frasco (fallback)
   function buildBottleSVG(hue) {
     var h = Math.floor(Number(hue));
     if (!Number.isFinite(h) || h < 0 || h > 360) h = 38;
@@ -248,7 +68,7 @@
     grad.setAttribute('x2', '1'); grad.setAttribute('y2', '1');
     var stop1 = document.createElementNS(NS, 'stop');
     stop1.setAttribute('offset', '0'); stop1.setAttribute('stop-color', 'hsl(' + h + ', 35%, 60%)');
-    var stop2 = document.createElementNS(NS, 'stop');
+    var stop2 = document.createElement(NS, 'stop');
     stop2.setAttribute('offset', '1'); stop2.setAttribute('stop-color', 'hsl(' + h + ', 28%, 35%)');
     grad.appendChild(stop1); grad.appendChild(stop2);
     defs.appendChild(grad); svg.appendChild(defs);
@@ -276,7 +96,507 @@
     return svg;
   }
 
-  // ---------- Render promo ----------
+  // ---------- Estado en memoria ----------
+  var DATA = [];
+  var promo = { activo: true, titulo: '2× $300.000', subtitulo: 'Combo de octubre', vigencia: 'Cantidad limitada', precio: 300000 };
+  var site = {
+    hero_h1: 'Perfumes árabes<br>y de nicho · <em>100% originales</em>',
+    hero_lead: 'Elige tus fragancias, arma tu combo y paga solo cuando lo recibes.',
+    nosotros_texto: '',
+    instagram: 'https://www.instagram.com/mega.fragancia7/',
+    whatsapp: WHATSAPP_DEFAULT
+  };
+  var WHATSAPP = WHATSAPP_DEFAULT;
+  var COMBO_PRECIO = COMBO_PRECIO_DEFAULT;
+  var active = 'Todos';
+  var search = '';
+  var productToOpen = null;
+  var mediaToOpen = []; // galería del producto abierto
+  var activeMediaIndex = 0;
+  var editingMedia = []; // archivos pendientes en el admin
+  var editingProductId = null;
+
+  // Carrito (local)
+  var cart = {};
+  function loadCart() {
+    try {
+      var raw = localStorage.getItem('mf_cart');
+      if (!raw) return {};
+      var c = JSON.parse(raw);
+      if (!c || typeof c !== 'object') return {};
+      var out = {};
+      Object.keys(c).forEach(function (k) {
+        var v = Number(c[k]);
+        if (Number.isInteger(v) && v > 0 && v <= 20) out[k] = v;
+      });
+      return out;
+    } catch (e) { return {}; }
+  }
+  function saveCart() {
+    try { localStorage.setItem('mf_cart', JSON.stringify(cart)); } catch (e) {}
+  }
+  cart = loadCart();
+
+  // ---------- Cargar datos desde Supabase ----------
+  function showError(msg) {
+    var banner = document.getElementById('error-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'error-banner';
+      banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#c66a5a;color:#fff;padding:14px 20px;text-align:center;z-index:9999;font:500 .9rem var(--sans);';
+      document.body.appendChild(banner);
+    }
+    banner.textContent = msg;
+  }
+
+  function clearError() {
+    var banner = document.getElementById('error-banner');
+    if (banner) banner.remove();
+  }
+
+  async function loadAll() {
+    if (!supabase) {
+      showError('Supabase no está configurado. Edita supabase-config.js con tu URL y anon key.');
+      return;
+    }
+
+    try {
+      // Cargar productos + sus medias
+      var prodsRes = await supabase
+        .from('productos')
+        .select('*, producto_media(*)')
+        .eq('activo', true)
+        .order('created_at', { ascending: true });
+
+      if (prodsRes.error) throw prodsRes.error;
+
+      DATA = (prodsRes.data || []).map(function (p) {
+        return {
+          id: p.id,
+          n: p.nombre,
+          t: p.tipo,
+          desc: p.descripcion || '',
+          precio: p.precio || 0,
+          presentacion: p.presentacion || '',
+          a: p.notas_salida || [],
+          b: p.notas_corazon || [],
+          c: p.notas_fondo || [],
+          h: p.color_h || 38,
+          media: (p.producto_media || [])
+            .sort(function (x, y) { return (x.orden || 0) - (y.orden || 0); })
+            .map(function (m) { return { url: m.url, tipo: m.tipo, es_portada: m.es_portada }; })
+        };
+      });
+
+      // Cargar configuración del sitio
+      var cfgRes = await supabase.from('site_config').select('*');
+      if (cfgRes.error) throw cfgRes.error;
+      var cfgMap = {};
+      (cfgRes.data || []).forEach(function (r) { cfgMap[r.clave] = r.valor; });
+
+      promo = {
+        activo: cfgMap.promo_activo !== 'false',
+        titulo: cfgMap.promo_titulo || promo.titulo,
+        subtitulo: cfgMap.promo_subtitulo || promo.subtitulo,
+        vigencia: cfgMap.promo_vigencia || promo.vigencia,
+        precio: Number(cfgMap.promo_precio) || COMBO_PRECIO_DEFAULT
+      };
+      COMBO_PRECIO = promo.precio;
+      site.hero_h1 = cfgMap.hero_h1 || site.hero_h1;
+      site.hero_lead = cfgMap.hero_lead || site.hero_lead;
+      site.nosotros_texto = cfgMap.nosotros_texto || site.nosotros_texto;
+      site.instagram = cfgMap.instagram || site.instagram;
+      site.whatsapp = cfgMap.whatsapp || WHATSAPP_DEFAULT;
+      WHATSAPP = site.whatsapp;
+
+      clearError();
+    } catch (e) {
+      console.error('Error cargando datos:', e);
+      showError('Error cargando datos: ' + (e.message || e));
+    }
+  }
+
+  // ---------- Render productos ----------
+  function renderFilters() {
+    var fbox = $('filters');
+    fbox.textContent = '';
+    ['Todos', 'Hombre', 'Mujer', 'Unisex'].forEach(function (f) {
+      var b = el('button', 'chip', f);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(f === active));
+      b.setAttribute('aria-controls', 'grid');
+      b.addEventListener('click', function () {
+        active = f;
+        renderFilters();
+        renderGrid();
+      });
+      fbox.appendChild(b);
+    });
+  }
+
+  function getCover(p) {
+    if (!p.media || !p.media.length) return null;
+    var portada = p.media.find(function (m) { return m.es_portada; });
+    return portada || p.media[0];
+  }
+
+  function renderGrid() {
+    var grid = $('grid');
+    var empty = $('empty');
+    grid.textContent = '';
+
+    var q = sanitizeLine(search, 40).toLowerCase();
+    var visible = DATA.filter(function (p) {
+      if (active !== 'Todos' && p.t !== active) return false;
+      if (q && p.n.toLowerCase().indexOf(q) === -1) return false;
+      return true;
+    });
+
+    if (!visible.length) { empty.hidden = false; return; }
+    empty.hidden = true;
+
+    visible.forEach(function (p) {
+      var card = el('article', 'card reveal in');
+      card.setAttribute('aria-label', p.n + ', ' + p.t);
+
+      var wrap = el('div', 'bottle-wrap');
+      var tagRow = el('div', 'tag-row');
+      tagRow.appendChild(el('span', 'tag cat-' + p.t.toLowerCase(), p.t));
+      tagRow.appendChild(el('span', 'tag combo-badge', 'Combo'));
+      wrap.appendChild(tagRow);
+
+      var cover = getCover(p);
+      if (cover) {
+        if (cover.tipo === 'video') {
+          var v = document.createElement('video');
+          v.src = cover.url;
+          v.muted = true;
+          v.loop = true;
+          v.autoplay = true;
+          v.playsInline = true;
+          v.style.maxHeight = '200px';
+          v.style.width = 'auto';
+          wrap.appendChild(v);
+        } else {
+          var img = document.createElement('img');
+          img.src = cover.url;
+          img.alt = p.n;
+          img.loading = 'lazy';
+          wrap.appendChild(img);
+        }
+      } else {
+        wrap.appendChild(buildBottleSVG(p.h));
+      }
+
+      // Thumbs si hay más de 1
+      if (p.media && p.media.length > 1) {
+        var thumbs = el('div', 'gallery-thumbs');
+        p.media.slice(0, 4).forEach(function (m) {
+          var t = el('div', 'gallery-thumb');
+          if (m.tipo === 'video') {
+            var vt = document.createElement('video');
+            vt.src = m.url;
+            vt.muted = true;
+            t.appendChild(vt);
+          } else {
+            var ti = document.createElement('img');
+            ti.src = m.url;
+            ti.alt = '';
+            t.appendChild(ti);
+          }
+          thumbs.appendChild(t);
+        });
+        wrap.appendChild(thumbs);
+      }
+
+      card.appendChild(wrap);
+
+      var body = el('div', 'body');
+      body.appendChild(el('h3', '', p.n));
+      body.appendChild(el('p', 'desc', p.desc || 'Fragancia de la colección de la temporada.'));
+
+      var price = el('div', 'price');
+      if (p.precio > 0) {
+        price.appendChild(document.createTextNode(fmt(p.precio)));
+        if (p.presentacion) {
+          var ps = document.createElement('small');
+          ps.textContent = ' · ' + p.presentacion;
+          price.appendChild(ps);
+        }
+      } else {
+        price.appendChild(document.createTextNode(fmt(Math.floor(COMBO_PRECIO / 2)) + ' c/u'));
+        var small = el('small', '', 'o 2× ' + fmt(COMBO_PRECIO) + ' en combo');
+        price.appendChild(small);
+      }
+      body.appendChild(price);
+
+      var row = el('div', 'row');
+      var qty = cart[p.id] || 0;
+      var pb = el('button', 'pick', qty ? ('En carrito (' + qty + ') +') : 'Añadir al carrito');
+      if (qty) pb.classList.add('added');
+      pb.type = 'button';
+      pb.setAttribute('aria-pressed', String(qty > 0));
+      pb.addEventListener('click', function (e) {
+        e.stopPropagation();
+        change(p, 1);
+      });
+      row.appendChild(pb);
+      body.appendChild(row);
+      card.appendChild(body);
+      grid.appendChild(card);
+
+      card.addEventListener('click', function (e) {
+        if (e.target.closest('button')) return;
+        openProductDetail(p);
+      });
+    });
+  }
+
+  // ---------- Modal de detalle ----------
+  function openProductDetail(p) {
+    productToOpen = p;
+    mediaToOpen = (p.media || []).slice();
+    activeMediaIndex = 0;
+    $('dp-title').textContent = p.n;
+
+    renderDetailContent();
+    if (typeof $('dproduct').showModal === 'function') $('dproduct').showModal();
+  }
+
+  function renderDetailContent() {
+    if (!productToOpen) return;
+    var p = productToOpen;
+    var content = $('dp-content');
+    content.textContent = '';
+
+    // Imagen/video principal
+    var imgWrap = el('div', 'pd-image');
+    var main = mediaToOpen[activeMediaIndex];
+    if (main) {
+      if (main.tipo === 'video') {
+        var v = document.createElement('video');
+        v.src = main.url;
+        v.controls = true;
+        v.autoplay = true;
+        v.muted = true;
+        v.loop = true;
+        v.style.maxWidth = '90%';
+        v.style.maxHeight = '90%';
+        imgWrap.appendChild(v);
+      } else {
+        var img = document.createElement('img');
+        img.src = main.url;
+        img.alt = p.n;
+        img.style.maxWidth = '90%';
+        img.style.maxHeight = '90%';
+        img.style.objectFit = 'contain';
+        imgWrap.appendChild(img);
+      }
+    } else {
+      imgWrap.appendChild(buildBottleSVG(p.h));
+    }
+    content.appendChild(imgWrap);
+
+    var info = el('div', 'pd-info');
+    info.appendChild(el('h4', '', p.t));
+    info.appendChild(el('h2', '', p.n));
+
+    var price = el('div', 'price');
+    if (p.precio > 0) {
+      price.appendChild(document.createTextNode(fmt(p.precio)));
+      if (p.presentacion) {
+        var ps = document.createElement('small');
+        ps.textContent = ' · ' + p.presentacion;
+        price.appendChild(ps);
+      }
+    } else {
+      price.appendChild(document.createTextNode(fmt(Math.floor(COMBO_PRECIO / 2)) + ' c/u'));
+      var small = el('small', '', 'o 2× ' + fmt(COMBO_PRECIO) + ' en combo');
+      price.appendChild(small);
+    }
+    info.appendChild(price);
+    info.appendChild(el('p', 'desc', p.desc || 'Fragancia de la colección de la temporada.'));
+
+    // Galería de miniaturas
+    if (mediaToOpen.length > 1) {
+      var gal = el('div', 'product-gallery');
+      mediaToOpen.forEach(function (m, idx) {
+        var it = el('div', 'gallery-item' + (idx === activeMediaIndex ? ' active' : ''));
+        if (m.tipo === 'video') {
+          var vt = document.createElement('video');
+          vt.src = m.url;
+          vt.muted = true;
+          it.appendChild(vt);
+        } else {
+          var ti = document.createElement('img');
+          ti.src = m.url;
+          ti.alt = '';
+          it.appendChild(ti);
+        }
+        it.addEventListener('click', function () {
+          activeMediaIndex = idx;
+          renderDetailContent();
+        });
+        gal.appendChild(it);
+      });
+      info.appendChild(gal);
+    }
+
+    content.appendChild(info);
+
+    $('dp-n1').textContent = (p.a || []).join(', ') || '—';
+    $('dp-n2').textContent = (p.b || []).join(', ') || '—';
+    $('dp-n3').textContent = (p.c || []).join(', ') || '—';
+  }
+
+  $('dp-add').addEventListener('click', function () {
+    if (productToOpen) change(productToOpen, 1);
+    var dp = $('dproduct');
+    if (dp && typeof dp.close === 'function') dp.close();
+  });
+
+  // ---------- Carrito ----------
+  function change(p, d) {
+    var id = p.id;
+    var q = (cart[id] || 0) + d;
+    if (q <= 0) delete cart[id];
+    else cart[id] = Math.min(q, 20);
+    saveCart();
+    renderGrid();
+    renderCart();
+  }
+
+  function renderCart() {
+    var cc = $('cc');
+    var clist = $('clist');
+    var csum = $('csum');
+    var chint = $('chint');
+    var wa = $('wa');
+    var obar = $('orderbar');
+    var oCount = $('obar-count');
+    var oSub = $('obar-sub');
+    var oBtn = $('obar-btn');
+
+    // Purga huérfanos
+    var validIds = {};
+    DATA.forEach(function (p) { validIds[p.id] = p; });
+    var changed = false;
+    Object.keys(cart).forEach(function (k) {
+      if (!(k in validIds)) { delete cart[k]; changed = true; }
+    });
+    if (changed) saveCart();
+
+    var u = Object.values(cart).reduce(function (a, b) { return a + b; }, 0);
+    var combos = Math.floor(u / 2);
+    var rem = u % 2;
+
+    cc.textContent = u;
+    oCount.textContent = u + (u === 1 ? ' fragancia' : ' fragancias');
+    oSub.textContent = rem
+      ? 'Te falta 1 para otro combo · ' + combos + (combos === 1 ? ' combo activo' : ' combos activos')
+      : (combos ? combos + ' × ' + fmt(COMBO_PRECIO) + ' = ' + fmt(combos * COMBO_PRECIO) : 'Agrega 2 fragancias para el combo 2×' + fmt(COMBO_PRECIO));
+
+    clist.textContent = '';
+    var ids = Object.keys(cart);
+    if (!ids.length) {
+      clist.appendChild(el('p', 'empty-msg', 'Tu carrito está vacío.'));
+    } else {
+      ids.forEach(function (id) {
+        var p = validIds[id];
+        if (!p) return;
+        var r = el('div', 'crow');
+        var left = el('div', 'name');
+        var mini = el('div', 'mini');
+        var cover = getCover(p);
+        if (cover) {
+          if (cover.tipo === 'video') {
+            var vt = document.createElement('video');
+            vt.src = cover.url;
+            vt.muted = true;
+            mini.appendChild(vt);
+          } else {
+            var mi = document.createElement('img');
+            mi.src = cover.url;
+            mi.alt = '';
+            mini.appendChild(mi);
+          }
+        } else {
+          mini.style.background = 'linear-gradient(160deg, hsl(' + p.h + ', 35%, 70%) 0%, hsl(' + p.h + ', 28%, 45%) 100%)';
+        }
+        left.appendChild(mini);
+        left.appendChild(el('span', '', p.n));
+        r.appendChild(left);
+
+        var q = el('div', 'q');
+        var m = el('button', '', '−');
+        m.type = 'button';
+        m.setAttribute('aria-label', 'Quitar una de ' + p.n);
+        m.addEventListener('click', function () { change(p, -1); });
+        var c = el('span', 'num', String(cart[id]));
+        var pl = el('button', '', '+');
+        pl.type = 'button';
+        pl.setAttribute('aria-label', 'Añadir una de ' + p.n);
+        pl.addEventListener('click', function () { change(p, 1); });
+        q.appendChild(m); q.appendChild(c); q.appendChild(pl);
+        r.appendChild(q);
+        clist.appendChild(r);
+      });
+    }
+
+    csum.textContent = combos ? combos + ' × ' + fmt(COMBO_PRECIO) + ' = ' + fmt(combos * COMBO_PRECIO) : '';
+    chint.textContent = rem ? 'Te falta 1 fragancia para otro combo. El precio de fragancia suelta lo confirma el negocio por WhatsApp.' : '';
+
+    if (isValidWhatsApp(WHATSAPP)) {
+      var lines = ids.map(function (id) {
+        var p = validIds[id];
+        return '- ' + cart[id] + ' x ' + (p ? p.n : '?');
+      }).join('\n');
+      var msg = 'Hola, Mega Fragancia 👋\nQuiero hacer este pedido:\n' + (lines || '(sin productos)') +
+        (combos ? '\n\nCombos 2×' + fmt(COMBO_PRECIO) + ': ' + combos : '') +
+        '\n\n¿Confirman disponibilidad, envío y forma de pago?';
+      if (msg.length > 800) msg = msg.slice(0, 790) + '...';
+      wa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent(msg);
+      wa.removeAttribute('aria-disabled');
+    } else {
+      wa.removeAttribute('href');
+      wa.setAttribute('aria-disabled', 'true');
+    }
+    oBtn.setAttribute('aria-disabled', u ? 'false' : 'true');
+    if (u > 0) obar.classList.add('on'); else obar.classList.remove('on');
+  }
+
+  // ---------- WhatsApp UI ----------
+  function renderWAFAB() {
+    var fab = $('wa-fab');
+    if (!fab) return;
+    if (isValidWhatsApp(WHATSAPP)) {
+      fab.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, Mega Fragancia. Quiero información sobre sus perfumes.');
+      fab.removeAttribute('aria-disabled');
+    } else {
+      fab.removeAttribute('href');
+    }
+  }
+  renderWAFAB();
+
+  var heroWa = $('hero-wa');
+  if (heroWa && isValidWhatsApp(WHATSAPP)) {
+    heroWa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, Mega Fragancia. Quiero información sobre sus perfumes.');
+  }
+  var nosotrosWa = $('nosotros-wa');
+  if (nosotrosWa && isValidWhatsApp(WHATSAPP)) {
+    nosotrosWa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, Mega Fragancia. Quiero más información.');
+  }
+
+  // ---------- Buscador ----------
+  var searchInput = $('search');
+  if (searchInput) {
+    searchInput.addEventListener('input', function (e) {
+      search = e.target.value;
+      renderGrid();
+    });
+  }
+
+  // ---------- Render promo y textos ----------
   function renderPromo() {
     var elTitulo = $('promo-titulo');
     if (!elTitulo) return;
@@ -302,19 +622,12 @@
       var block = $('promo-block');
       if (block) block.style.display = 'none';
     }
-    if (Number.isFinite(promo.precio) && promo.precio > 0) {
-      COMBO_PRECIO = promo.precio;
-    }
+    COMBO_PRECIO = promo.precio || COMBO_PRECIO_DEFAULT;
   }
 
-  // ---------- Render textos del sitio ----------
-  // Helper: convierte un string con HTML simple (<br>, <em>, <strong>) a HTML seguro.
   function safeHTML(s) {
     if (!s) return '';
-    // Escapamos TODO primero
-    var esc = String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    // Permitimos solo <br>, <br/>, <em>, </em>, <strong>, </strong>
-    return esc
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/&lt;br\s*\/?&gt;/gi, '<br>')
       .replace(/&lt;em&gt;/gi, '<em>').replace(/&lt;\/em&gt;/gi, '</em>')
       .replace(/&lt;strong&gt;/gi, '<strong>').replace(/&lt;\/strong&gt;/gi, '</strong>');
@@ -322,321 +635,22 @@
 
   function renderSite() {
     var h1 = document.querySelector('.hero-text h1');
-    if (h1 && site.hero_h1) h1.innerHTML = safeHTML(site.hero_h1);
+    if (h1) h1.innerHTML = safeHTML(site.hero_h1);
     var lead = document.querySelector('.hero-text .lead');
-    if (lead && site.hero_lead) lead.textContent = sanitizeLine(site.hero_lead, 500);
+    if (lead) lead.textContent = site.hero_lead;
     var nosText = document.querySelector('.nos-text');
     if (nosText && site.nosotros_texto) {
-      var existingPs = nosText.querySelectorAll('p:not(.eyebrow):not(.nos-dev)');
+      var ps = nosText.querySelectorAll('p:not(.eyebrow):not(.nos-dev)');
       var newP = document.createElement('p');
-      newP.textContent = sanitizeLine(site.nosotros_texto, 1000);
-      if (existingPs[0]) existingPs[0].parentNode.replaceChild(newP, existingPs[0]);
-      if (existingPs[1]) existingPs[1].remove();
+      newP.textContent = site.nosotros_texto;
+      if (ps[0]) ps[0].parentNode.replaceChild(newP, ps[0]);
+      if (ps[1]) ps[1].remove();
     }
+    var ig = document.querySelector('.foot-ig');
+    if (ig && site.instagram) ig.href = site.instagram;
   }
 
-  // ---------- Render catálogo ----------
-  function renderFilters() {
-    var fbox = $('filters');
-    fbox.textContent = '';
-    FILTERS.forEach(function (f) {
-      var b = el('button', 'chip', f);
-      b.type = 'button';
-      b.setAttribute('aria-pressed', String(f === active));
-      b.setAttribute('aria-controls', 'grid');
-      b.addEventListener('click', function () {
-        active = f;
-        renderFilters();
-        renderGrid();
-      });
-      fbox.appendChild(b);
-    });
-  }
-
-  function renderGrid() {
-    var grid = $('grid');
-    var empty = $('empty');
-    grid.textContent = '';
-
-    var q = sanitizeLine(search, 40).toLowerCase();
-    var visible = DATA.filter(function (p) {
-      if (active !== 'Todos' && p.t !== active) return false;
-      if (q && p.n.toLowerCase().indexOf(q) === -1) return false;
-      return true;
-    });
-
-    if (!visible.length) { empty.hidden = false; return; }
-    empty.hidden = true;
-
-    visible.forEach(function (p, idx) {
-      var card = el('article', 'card reveal in');
-      card.setAttribute('aria-label', p.n + ', ' + p.t);
-      card.dataset.idx = String(DATA.indexOf(p));
-
-      // Imagen
-      var wrap = el('div', 'bottle-wrap');
-      var tagRow = el('div', 'tag-row');
-      var tagCat = el('span', 'tag cat-' + p.t.toLowerCase(), p.t);
-      var tagCom = el('span', 'tag combo-badge', 'Combo');
-      tagRow.appendChild(tagCat);
-      tagRow.appendChild(tagCom);
-      wrap.appendChild(tagRow);
-
-      if (p.img) {
-        var img = document.createElement('img');
-        img.src = p.img;
-        img.alt = p.n;
-        img.loading = 'lazy';
-        img.onerror = function () { this.parentNode.replaceChild(buildBottleSVG(p.h), this); };
-        wrap.appendChild(img);
-      } else {
-        wrap.appendChild(buildBottleSVG(p.h));
-      }
-      card.appendChild(wrap);
-
-      // Body
-      var body = el('div', 'body');
-      body.appendChild(el('h3', '', p.n));
-      body.appendChild(el('p', 'desc', p.desc || 'Fragancia de la colección de la temporada.'));
-
-      // Precio y presentación
-      var price = el('div', 'price');
-      if (p.precio > 0) {
-        price.appendChild(document.createTextNode(fmt(p.precio)));
-        if (p.presentacion) {
-          var presSpan = document.createElement('small');
-          presSpan.textContent = ' · ' + p.presentacion;
-          price.appendChild(presSpan);
-        }
-      } else {
-        price.appendChild(document.createTextNode(fmt(Math.floor(COMBO_PRECIO / 2)) + ' c/u'));
-        var small = el('small', '', 'o 2× ' + fmt(COMBO_PRECIO) + ' en combo');
-        price.appendChild(small);
-      }
-      body.appendChild(price);
-
-      var row = el('div', 'row');
-      var qty = cart[p.n] || 0;
-      var pb = el('button', 'pick', qty ? ('En carrito (' + qty + ') +') : 'Añadir al carrito');
-      if (qty) pb.classList.add('added');
-      pb.type = 'button';
-      pb.setAttribute('aria-pressed', String(qty > 0));
-      pb.addEventListener('click', function (e) {
-        e.stopPropagation();
-        change(p.n, 1);
-      });
-      row.appendChild(pb);
-      body.appendChild(row);
-      card.appendChild(body);
-      grid.appendChild(card);
-
-      // Click en la card abre detalle (excepto botones)
-      card.addEventListener('click', function (e) {
-        if (e.target.closest('button')) return;
-        openProductDetail(p);
-      });
-    });
-  }
-
-  // ---------- Carrito ----------
-  function change(name, d) {
-    var safe = sanitizeLine(name, 80);
-    var q = (cart[safe] || 0) + d;
-    if (q <= 0) delete cart[safe];
-    else cart[safe] = Math.min(q, 20);
-    saveCart();
-    renderGrid();
-    renderCart();
-  }
-  function units() { var t = 0; Object.keys(cart).forEach(function (k) { t += cart[k]; }); return t; }
-
-  function renderCart() {
-    var cc = $('cc');
-    var clist = $('clist');
-    var csum = $('csum');
-    var chint = $('chint');
-    var wa = $('wa');
-    var obar = $('orderbar');
-    var oCount = $('obar-count');
-    var oSub = $('obar-sub');
-    var oBtn = $('obar-btn');
-
-    // Purga huérfanos
-    var validNames = {};
-    DATA.forEach(function (p) { validNames[p.n] = p; });
-    var changed = false;
-    Object.keys(cart).forEach(function (k) {
-      if (!(k in validNames)) { delete cart[k]; changed = true; }
-    });
-    if (changed) saveCart();
-
-    var u = units();
-    var combos = Math.floor(u / 2);
-    var rem = u % 2;
-    cc.textContent = u;
-    oCount.textContent = u + (u === 1 ? ' fragancia' : ' fragancias');
-    oSub.textContent = rem
-      ? ('Te falta 1 para completar otro combo · ' + combos + (combos === 1 ? ' combo' : ' combos') + ' activo' + (combos === 1 ? '' : 's'))
-      : (combos ? combos + (combos === 1 ? ' combo' : ' combos') + ' × ' + fmt(COMBO_PRECIO) + ' = ' + fmt(combos * COMBO_PRECIO) : 'Agrega 2 fragancias para activar el combo 2×' + fmt(COMBO_PRECIO));
-
-    clist.textContent = '';
-    var names = Object.keys(cart);
-    if (!names.length) {
-      clist.appendChild(el('p', 'empty-msg', 'Tu carrito está vacío. Agrega fragancias desde el catálogo.'));
-    } else {
-      names.forEach(function (n) {
-        var r = el('div', 'crow');
-        var left = el('div', 'name');
-        var mini = el('div', 'mini');
-        var product = validNames[n];
-        if (product) {
-          if (product.img) {
-            var img = document.createElement('img');
-            img.src = product.img;
-            img.alt = '';
-            img.onerror = function () { this.style.display = 'none'; };
-            mini.appendChild(img);
-          } else {
-            mini.style.background = 'linear-gradient(160deg, hsl(' + product.h + ', 35%, 70%) 0%, hsl(' + product.h + ', 28%, 45%) 100%)';
-          }
-        }
-        left.appendChild(mini);
-        left.appendChild(el('span', '', n));
-        r.appendChild(left);
-
-        var q = el('div', 'q');
-        var m = el('button', '', '−');
-        m.type = 'button';
-        m.setAttribute('aria-label', 'Quitar una unidad de ' + n);
-        m.addEventListener('click', function () { change(n, -1); });
-        var c = el('span', 'num', String(cart[n]));
-        var pl = el('button', '', '+');
-        pl.type = 'button';
-        pl.setAttribute('aria-label', 'Añadir una unidad de ' + n);
-        pl.addEventListener('click', function () { change(n, 1); });
-        q.appendChild(m); q.appendChild(c); q.appendChild(pl);
-        r.appendChild(q);
-        clist.appendChild(r);
-      });
-    }
-
-    csum.textContent = combos ? (combos + (combos === 1 ? ' combo' : ' combos') + ' × ' + fmt(COMBO_PRECIO) + ' = ' + fmt(combos * COMBO_PRECIO)) : '';
-    chint.textContent = rem ? 'Te falta 1 fragancia para completar otro combo. El precio de fragancia suelta lo confirma el negocio por WhatsApp.' : '';
-
-    // Link de WhatsApp
-    if (isValidWhatsApp(WHATSAPP)) {
-      var lines = names.map(function (n) { return '- ' + cart[n] + ' x ' + sanitizeLine(n, 60); }).join('\n');
-      var msg = 'Hola, Mega Fragancia 👋\nQuiero hacer este pedido:\n' + (lines || '(sin productos)') +
-        (combos ? '\n\nCombos 2×' + fmt(COMBO_PRECIO) + ': ' + combos : '') +
-        '\n\n¿Confirman disponibilidad, envío y forma de pago?';
-      if (msg.length > 800) msg = msg.slice(0, 790) + '...';
-      wa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent(msg);
-      wa.removeAttribute('aria-disabled');
-    } else {
-      wa.removeAttribute('href');
-      wa.setAttribute('aria-disabled', 'true');
-    }
-    oBtn.setAttribute('aria-disabled', u ? 'false' : 'true');
-    if (u > 0) obar.classList.add('on'); else obar.classList.remove('on');
-  }
-
-  // ---------- Modal de detalle de producto ----------
-  function openProductDetail(p) {
-    productToOpen = p;
-    var dp = $('dproduct');
-    if (!dp) return;
-    $('dp-title').textContent = p.n;
-
-    var content = $('dp-content');
-    content.textContent = '';
-
-    var imgWrap = el('div', 'pd-image');
-    if (p.img) {
-      var img = document.createElement('img');
-      img.src = p.img;
-      img.alt = p.n;
-      img.onerror = function () { this.parentNode.replaceChild(buildBottleSVG(p.h), this); };
-      imgWrap.appendChild(img);
-    } else {
-      imgWrap.appendChild(buildBottleSVG(p.h));
-    }
-    content.appendChild(imgWrap);
-
-    var info = el('div', 'pd-info');
-    var h4 = el('h4', '', p.t);
-    info.appendChild(h4);
-    var h2 = el('h2', '', p.n);
-    info.appendChild(h2);
-
-    var price = el('div', 'price');
-    if (p.precio > 0) {
-      price.appendChild(document.createTextNode(fmt(p.precio)));
-      if (p.presentacion) {
-        var presSpan = document.createElement('small');
-        presSpan.textContent = ' · ' + p.presentacion;
-        price.appendChild(presSpan);
-      }
-    } else {
-      price.appendChild(document.createTextNode(fmt(Math.floor(COMBO_PRECIO / 2)) + ' c/u'));
-      var small = el('small', '', 'o 2× ' + fmt(COMBO_PRECIO) + ' en combo');
-      price.appendChild(small);
-    }
-    info.appendChild(price);
-
-    var desc = el('p', 'desc', p.desc || 'Fragancia de la colección de la temporada.');
-    info.appendChild(desc);
-    content.appendChild(info);
-
-    $('dp-n1').textContent = (p.a || []).join(', ') || '—';
-    $('dp-n2').textContent = (p.b || []).join(', ') || '—';
-    $('dp-n3').textContent = (p.c || []).join(', ') || '—';
-
-    var addBtn = $('dp-add');
-    addBtn.textContent = cart[p.n] ? 'Añadir otra unidad' : 'Añadir al carrito';
-
-    if (typeof dp.showModal === 'function') dp.showModal();
-  }
-
-  $('dp-add').addEventListener('click', function () {
-    if (productToOpen) change(productToOpen.n, 1);
-    var dp = $('dproduct');
-    if (dp && typeof dp.close === 'function') dp.close();
-  });
-
-  // ---------- Botón flotante de WhatsApp ----------
-  function renderWAFAB() {
-    var fab = $('wa-fab');
-    if (!fab) return;
-    if (isValidWhatsApp(WHATSAPP)) {
-      var msg = 'Hola, Mega Fragancia. Quiero información sobre sus perfumes.';
-      fab.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent(msg);
-      fab.removeAttribute('aria-disabled');
-    } else {
-      fab.removeAttribute('href');
-    }
-  }
-  renderWAFAB();
-
-  // ---------- Hero WhatsApp + nosotros WhatsApp ----------
-  var heroWa = $('hero-wa');
-  if (heroWa && isValidWhatsApp(WHATSAPP)) {
-    heroWa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, Mega Fragancia. Quiero información sobre sus perfumes.');
-  }
-  var nosotrosWa = $('nosotros-wa');
-  if (nosotrosWa && isValidWhatsApp(WHATSAPP)) {
-    nosotrosWa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, Mega Fragancia. Quiero más información.');
-  }
-
-  // ---------- Buscador ----------
-  var searchInput = $('search');
-  if (searchInput) {
-    searchInput.addEventListener('input', function (e) {
-      search = e.target.value;
-      renderGrid();
-    });
-  }
-
-  // ---------- Carrito: abrir/cerrar ----------
+  // ---------- Dialog handlers ----------
   document.addEventListener('click', function (e) {
     var t = e.target.closest && e.target.closest('#wa, #obar-btn');
     if (!t) return;
@@ -646,13 +660,10 @@
       if (d && typeof d.showModal === 'function') d.showModal();
     }
   });
-
   $('cartbtn').addEventListener('click', function () {
     var d = $('dcart');
     if (d && typeof d.showModal === 'function') d.showModal();
   });
-
-  // Cerrar dialogs (botón X, backdrop, ESC)
   document.querySelectorAll('[data-close]').forEach(function (b) {
     b.addEventListener('click', function () {
       var d = b.closest('dialog');
@@ -664,8 +675,6 @@
       if (e.target === d && typeof d.close === 'function') d.close();
     });
   });
-
-  // Botón "lnk" en el footer abre dialogs
   document.querySelectorAll('[data-dlg]').forEach(function (b) {
     b.addEventListener('click', function () {
       var id = b.getAttribute('data-dlg');
@@ -674,13 +683,12 @@
     });
   });
 
-  // ---------- Sticky header ----------
+  // ---------- Sticky header y reveal ----------
   var hdr = $('hdr');
   function onScroll() { hdr.classList.toggle('scrolled', window.scrollY > 12); }
   window.addEventListener('scroll', onScroll, { passive: true });
   onScroll();
 
-  // ---------- Reveal animation ----------
   if ('IntersectionObserver' in window) {
     var io = new IntersectionObserver(function (es) {
       es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
@@ -690,217 +698,30 @@
     document.querySelectorAll('.reveal').forEach(function (n) { n.classList.add('in'); });
   }
 
-  // ---------- Año dinámico ----------
   var y = $('year');
   if (y) y.textContent = new Date().getFullYear();
 
   // ============================================================
-  //                    PANEL DE ADMINISTRACIÓN
+  //                      PANEL DE ADMINISTRACIÓN
   // ============================================================
-
-  function simpleHash(s) {
-    var h = 5381;
-    for (var i = 0; i < s.length; i++) { h = ((h << 5) + h) + s.charCodeAt(i); h = h & 0x7fffffff; }
-    return h.toString(36);
-  }
-  var EXPECTED_PASS_HASH = simpleHash('mega2026');
-
-  function checkPass(input) { return simpleHash(input) === EXPECTED_PASS_HASH; }
-
-  var dadmin = $('dadmin');
-  var adminBtn = $('adminbtn');
-
-  if (adminBtn && dadmin) {
-    adminBtn.addEventListener('click', function () {
-      if (sessionStorage.getItem('mf_admin_ok') === '1') {
-        showAdminPanel();
-      } else {
-        showAdminLogin();
-      }
-      if (typeof dadmin.showModal === 'function') dadmin.showModal();
-    });
-
-    // Login
-    var adminForm = $('admin-form');
-    if (adminForm) {
-      adminForm.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var pass = $('admin-pass').value;
-        if (checkPass(pass)) {
-          sessionStorage.setItem('mf_admin_ok', '1');
-          showAdminPanel();
-          $('admin-pass').value = '';
-          $('admin-error').hidden = true;
-        } else {
-          $('admin-error').hidden = false;
-        }
-      });
-    }
-
-    // Tabs
-    document.querySelectorAll('.admin-tab').forEach(function (tab) {
-      tab.addEventListener('click', function () {
-        var target = tab.dataset.tab;
-        document.querySelectorAll('.admin-tab').forEach(function (t) { t.setAttribute('aria-pressed', String(t === tab)); });
-        document.querySelectorAll('.admin-tab-panel').forEach(function (p) {
-          p.classList.toggle('on', p.dataset.panel === target);
-        });
-      });
-    });
-
-    // Promo
-    $('apromo-save').addEventListener('click', function () {
-      promo = {
-        activo: $('apromo-activo').checked,
-        titulo: sanitizeLine($('apromo-titulo').value, 40) || PROMO_DEFAULT.titulo,
-        subtitulo: sanitizeLine($('apromo-subtitulo').value, 60) || PROMO_DEFAULT.subtitulo,
-        vigencia: sanitizeLine($('apromo-vigencia').value, 60) || PROMO_DEFAULT.vigencia,
-        precio: (function () { var n = Number($('apromo-precio').value); return Number.isFinite(n) && n > 0 ? n : PROMO_DEFAULT.precio; })()
-      };
-      renderPromo();
-      renderGrid();
-      renderCart();
-      showExportFeedback('apromo-feedback', '⏳ Guardando y sincronizando...');
-      saveAndSync('mf_promo', promo, 'Update promo from admin').then(function (r) {
-        if (r.ok) showExportFeedback('apromo-feedback', '✓ Guardado y sincronizado');
-        else showExportFeedback('apromo-feedback', '⚠ Guardado local. Error: ' + r.error);
-      });
-    });
-
-    $('apromo-reset').addEventListener('click', function () {
-      if (confirm('¿Restablecer la promoción a los valores por defecto?')) {
-        promo = Object.assign({}, PROMO_DEFAULT);
-        renderPromo();
-        renderGrid();
-        renderCart();
-        fillPromoForm();
-        showExportFeedback('apromo-feedback', '⏳ Sincronizando...');
-        saveAndSync('mf_promo', promo, 'Reset promo').then(function (r) {
-          if (r.ok) showExportFeedback('apromo-feedback', '✓ Restablecido y sincronizado');
-          else showExportFeedback('apromo-feedback', '⚠ Restablecido local. ' + (r.error || ''));
-        });
-      }
-    });
-
-    // Productos — agregar
-    var npFile = $('np-file');
-    var npPreview = $('np-preview');
-    var npImageData = '';
-
-    if (npFile) {
-      npFile.addEventListener('change', function (e) {
-        var file = e.target.files[0];
-        if (!file) return;
-        if (file.size > 8 * 1024 * 1024) {
-          alert('La imagen es demasiado grande. Máximo 8MB.');
-          return;
-        }
-        var reader = new FileReader();
-        reader.onload = function (ev) {
-          npImageData = ev.target.result;
-          npPreview.textContent = '';
-          var img = document.createElement('img');
-          img.src = npImageData;
-          npPreview.appendChild(img);
-        };
-        reader.readAsDataURL(file);
-      });
-    }
-
-    $('np-save').addEventListener('click', function () {
-      var nombre = sanitizeLine($('np-nombre').value, 60);
-      if (!nombre) { alert('Ingresa un nombre para el producto.'); return; }
-      var precio = Number($('np-precio').value);
-      var newP = {
-        n: nombre,
-        t: $('np-tipo').value,
-        h: Math.floor(Math.random() * 360),
-        precio: Number.isFinite(precio) && precio > 0 ? precio : 0,
-        presentacion: sanitizeLine($('np-presentacion').value, 30),
-        desc: sanitizeLine($('np-desc').value, 200),
-        a: sanitizeLine($('np-salida').value, 100).split(',').map(function (s) { return s.trim(); }).filter(Boolean),
-        b: sanitizeLine($('np-corazon').value, 100).split(',').map(function (s) { return s.trim(); }).filter(Boolean),
-        c: sanitizeLine($('np-fondo').value, 100).split(',').map(function (s) { return s.trim(); }).filter(Boolean),
-        img: npImageData
-      };
-      DATA.push(newP);
-      renderGrid();
-      renderProductsList();
-      $('np-nombre').value = '';
-      $('np-precio').value = '';
-      $('np-presentacion').value = '';
-      $('np-desc').value = '';
-      $('np-salida').value = '';
-      $('np-corazon').value = '';
-      $('np-fondo').value = '';
-      npImageData = '';
-      npPreview.textContent = 'Sin imagen';
-      showExportFeedback('np-feedback', '⏳ Guardando y sincronizando...');
-      saveAndSync('mf_products', DATA, 'Add product: ' + newP.n).then(function (r) {
-        if (r.ok) showExportFeedback('np-feedback', '✓ Producto guardado y sincronizado');
-        else showExportFeedback('np-feedback', '⚠ Guardado local. Error: ' + r.error);
-      });
-    });
-
-    // Textos
-    $('as-save').addEventListener('click', function () {
-      site.hero_h1 = sanitizeLine($('as-hero-h1').value, 200);
-      site.hero_lead = sanitizeLine($('as-hero-lead').value, 500);
-      site.nosotros_texto = sanitizeLine($('as-nos-texto').value, 1000);
-      site.instagram = sanitizeLine($('as-ig').value, 200);
-      renderSite();
-      showExportFeedback('as-feedback', '⏳ Guardando y sincronizando...');
-      saveAndSync('mf_site', site, 'Update site texts').then(function (r) {
-        if (r.ok) showExportFeedback('as-feedback', '✓ Guardado y sincronizado');
-        else showExportFeedback('as-feedback', '⚠ Guardado local. Error: ' + r.error);
-      });
-    });
-
-    // Eliminar producto
-    // (override — ya estaba en renderProductsList, lo modifico arriba)
-    // El evento se reemplaza en renderProductsList usando saveAndSync
-
-    // Recargar
-    var reloadBtn = $('admin-reload');
-    if (reloadBtn) {
-      reloadBtn.addEventListener('click', function () {
-        loadRemote().then(function (ok) {
-          renderPromo();
-          renderSite();
-          renderFilters();
-          renderGrid();
-          renderCart();
-          renderProductsList();
-          fillPromoForm();
-          fillSiteForm();
-          showExportFeedback('reload-feedback', ok ? '✓ Datos recargados' : '⚠ No se pudo recargar');
-        });
-      });
-    }
-  }
 
   function showAdminLogin() {
     $('admin-login').hidden = false;
     $('admin-panel').hidden = true;
   }
-
   function showAdminPanel() {
     $('admin-login').hidden = true;
     $('admin-panel').hidden = false;
-    fillPromoForm();
-    fillSiteForm();
+    fillAllForms();
     renderProductsList();
   }
 
-  function fillPromoForm() {
+  function fillAllForms() {
     $('apromo-activo').checked = promo.activo;
     $('apromo-titulo').value = promo.titulo;
     $('apromo-subtitulo').value = promo.subtitulo;
     $('apromo-vigencia').value = promo.vigencia;
     $('apromo-precio').value = promo.precio;
-  }
-
-  function fillSiteForm() {
     $('as-hero-h1').value = site.hero_h1;
     $('as-hero-lead').value = site.hero_lead;
     $('as-nos-texto').value = site.nosotros_texto;
@@ -911,45 +732,376 @@
     var list = $('products-list');
     if (!list) return;
     list.textContent = '';
-    DATA.forEach(function (p, idx) {
+    DATA.forEach(function (p) {
       var li = el('li', 'admin-list-item');
       var info = el('div', 'info');
       info.appendChild(el('strong', '', p.n));
-      info.appendChild(el('small', '', p.t + ' · ' + (p.desc ? p.desc.slice(0, 60) : 'Sin descripción')));
+      var sub = p.t + ' · ' + fmt(p.precio) + (p.presentacion ? ' · ' + p.presentacion : '');
+      info.appendChild(el('small', '', sub));
       li.appendChild(info);
 
-      if (p.img) {
+      var cover = getCover(p);
+      if (cover) {
         var thumb = el('div', 'mini-thumb');
-        var tImg = document.createElement('img');
-        tImg.src = p.img;
-        tImg.alt = '';
-        thumb.appendChild(tImg);
+        if (cover.tipo === 'video') {
+          var vt = document.createElement('video');
+          vt.src = cover.url;
+          vt.muted = true;
+          thumb.appendChild(vt);
+        } else {
+          var ti = document.createElement('img');
+          ti.src = cover.url;
+          ti.alt = '';
+          thumb.appendChild(ti);
+        }
         li.appendChild(thumb);
       }
 
       var acts = el('div', 'acts');
+      var edit = el('button', '', 'Editar');
+      edit.type = 'button';
+      edit.addEventListener('click', function () { startEdit(p); });
       var del = el('button', 'danger', 'Eliminar');
       del.type = 'button';
-      del.addEventListener('click', function () {
-        if (confirm('¿Eliminar "' + p.n + '"?')) {
-          var deletedName = p.n;
-          DATA.splice(idx, 1);
-          delete cart[p.n];
-          saveCart();
-          renderGrid();
-          renderCart();
-          renderProductsList();
-          showExportFeedback('np-feedback', '⏳ Sincronizando...');
-          saveAndSync('mf_products', DATA, 'Delete product: ' + deletedName).then(function (r) {
-            if (r.ok) showExportFeedback('np-feedback', '✓ Eliminado y sincronizado');
-            else showExportFeedback('np-feedback', '⚠ Eliminado local. ' + (r.error || ''));
-          });
-        }
-      });
+      del.addEventListener('click', function () { deleteProduct(p); });
+      acts.appendChild(edit);
       acts.appendChild(del);
       li.appendChild(acts);
       list.appendChild(li);
     });
+  }
+
+  // ---- Crear / editar producto ----
+  var npFiles = $('np-files');
+  if (npFiles) {
+    npFiles.addEventListener('change', function (e) {
+      Array.from(e.target.files).forEach(function (file) {
+        if (file.size > 50 * 1024 * 1024) {
+          alert('"' + file.name + '" es demasiado grande. Máximo 50MB por archivo.');
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+          editingMedia.push({
+            file: file,
+            dataUrl: ev.target.result,
+            tipo: file.type.indexOf('video') === 0 ? 'video' : 'imagen',
+            nombre: file.name
+          });
+          renderEditingMediaPreview();
+        };
+        reader.readAsDataURL(file);
+      });
+      npFiles.value = '';
+    });
+  }
+
+  function renderEditingMediaPreview() {
+    var prev = $('np-preview');
+    if (!prev) return;
+    prev.textContent = '';
+    if (!editingMedia.length) {
+      prev.textContent = 'Sin archivos seleccionados';
+      return;
+    }
+    editingMedia.forEach(function (m, idx) {
+      var item = el('div', 'preview-item');
+      if (m.tipo === 'video') {
+        var v = document.createElement('video');
+        v.src = m.dataUrl;
+        v.muted = true;
+        item.appendChild(v);
+      } else {
+        var img = document.createElement('img');
+        img.src = m.dataUrl;
+        item.appendChild(img);
+      }
+      var badge = el('span', 'badge', m.tipo === 'video' ? '▶ Video' : (idx === 0 ? '★ Portada' : '📷 Foto'));
+      item.appendChild(badge);
+      var rm = el('button', 'remove', '×');
+      rm.type = 'button';
+      rm.title = 'Quitar';
+      rm.addEventListener('click', function (e) {
+        e.preventDefault();
+        editingMedia.splice(idx, 1);
+        renderEditingMediaPreview();
+      });
+      item.appendChild(rm);
+      prev.appendChild(item);
+    });
+  }
+
+  function resetEditForm() {
+    editingMedia = [];
+    editingProductId = null;
+    $('np-nombre').value = '';
+    $('np-tipo').value = 'Unisex';
+    $('np-presentacion').value = '';
+    $('np-precio').value = '';
+    $('np-desc').value = '';
+    $('np-salida').value = '';
+    $('np-corazon').value = '';
+    $('np-fondo').value = '';
+    renderEditingMediaPreview();
+    var lbl = $('np-save');
+    lbl.textContent = 'Agregar producto';
+  }
+
+  function startEdit(p) {
+    editingProductId = p.id;
+    $('np-nombre').value = p.n;
+    $('np-tipo').value = p.t;
+    $('np-presentacion').value = p.presentacion;
+    $('np-precio').value = p.precio;
+    $('np-desc').value = p.desc;
+    $('np-salida').value = (p.a || []).join(', ');
+    $('np-corazon').value = (p.b || []).join(', ');
+    $('np-fondo').value = (p.c || []).join(', ');
+    editingMedia = [];
+    renderEditingMediaPreview();
+    $('np-save').textContent = 'Guardar cambios';
+    $('np-cancel').style.display = '';
+    document.querySelector('.admin-help').open = true;
+    $('np-nombre').focus();
+  }
+
+  async function saveProduct() {
+    if (!supabase) { alert('Supabase no configurado.'); return; }
+    var nombre = sanitizeLine($('np-nombre').value, 60);
+    if (!nombre) { alert('Ingresa un nombre.'); return; }
+
+    var data = {
+      nombre: nombre,
+      tipo: $('np-tipo').value,
+      descripcion: sanitizeLine($('np-desc').value, 500),
+      precio: Number($('np-precio').value) || 0,
+      presentacion: sanitizeLine($('np-presentacion').value, 30),
+      notas_salida: sanitizeLine($('np-salida').value, 200).split(',').map(function (s) { return s.trim(); }).filter(Boolean),
+      notas_corazon: sanitizeLine($('np-corazon').value, 200).split(',').map(function (s) { return s.trim(); }).filter(Boolean),
+      notas_fondo: sanitizeLine($('np-fondo').value, 200).split(',').map(function (s) { return s.trim(); }).filter(Boolean),
+      color_h: Math.floor(Math.random() * 360)
+    };
+
+    showExportFeedback('np-feedback', '⏳ Guardando...');
+    try {
+      var productoId;
+      if (editingProductId) {
+        var upd = await supabase.from('productos').update(data).eq('id', editingProductId);
+        if (upd.error) throw upd.error;
+        productoId = editingProductId;
+      } else {
+        var ins = await supabase.from('productos').insert(data).select('id').single();
+        if (ins.error) throw ins.error;
+        productoId = ins.data.id;
+      }
+
+      // Subir archivos multimedia
+      if (editingMedia.length) {
+        for (var i = 0; i < editingMedia.length; i++) {
+          var m = editingMedia[i];
+          var ext = m.tipo === 'video' ? 'webm' : 'jpg';
+          var path = productoId + '/' + Date.now() + '_' + i + '.' + ext;
+          showExportFeedback('np-feedback', '⏳ Subiendo ' + (i + 1) + '/' + editingMedia.length + '...');
+
+          // Subir a Supabase Storage
+          var blob = await (await fetch(m.dataUrl)).blob();
+          var uploadRes = await supabase.storage.from(BUCKET).upload(path, blob, {
+            contentType: m.tipo === 'video' ? 'video/webm' : 'image/jpeg',
+            upsert: true
+          });
+          if (uploadRes.error) throw uploadRes.error;
+
+          // Obtener URL pública
+          var pubRes = supabase.storage.from(BUCKET).getPublicUrl(path);
+          var pubUrl = pubRes.data.publicUrl;
+
+          // Guardar referencia en producto_media
+          var mediaRow = {
+            producto_id: productoId,
+            url: pubUrl,
+            tipo: m.tipo,
+            es_portada: i === 0,
+            orden: i
+          };
+          var medRes = await supabase.from('producto_media').insert(mediaRow);
+          if (medRes.error) throw medRes.error;
+        }
+      }
+
+      // Recargar
+      await loadAll();
+      renderPromo();
+      renderSite();
+      renderGrid();
+      renderCart();
+      renderProductsList();
+      resetEditForm();
+      showExportFeedback('np-feedback', '✓ Producto guardado y sincronizado');
+    } catch (e) {
+      console.error(e);
+      showExportFeedback('np-feedback', '⚠ Error: ' + (e.message || e));
+    }
+  }
+
+  async function deleteProduct(p) {
+    if (!supabase) return;
+    if (!confirm('¿Eliminar "' + p.n + '"?')) return;
+    showExportFeedback('np-feedback', '⏳ Eliminando...');
+    try {
+      // Primero borrar los archivos del storage
+      if (p.media && p.media.length) {
+        var paths = p.media.map(function (m) {
+          var u = new URL(m.url);
+          return u.pathname.split('/storage/v1/object/public/' + BUCKET + '/')[1] || '';
+        }).filter(Boolean);
+        if (paths.length) {
+          await supabase.storage.from(BUCKET).remove(paths);
+        }
+      }
+      // Luego borrar el producto (cascade borra producto_media)
+      var del = await supabase.from('productos').delete().eq('id', p.id);
+      if (del.error) throw del.error;
+      await loadAll();
+      renderGrid();
+      renderCart();
+      renderProductsList();
+      showExportFeedback('np-feedback', '✓ Producto eliminado');
+    } catch (e) {
+      showExportFeedback('np-feedback', '⚠ Error: ' + (e.message || e));
+    }
+  }
+
+  $('np-save').addEventListener('click', saveProduct);
+  $('np-cancel').addEventListener('click', function () {
+    resetEditForm();
+    $('np-cancel').style.display = 'none';
+  });
+
+  // ---- Promo ----
+  async function savePromo() {
+    if (!supabase) return;
+    showExportFeedback('apromo-feedback', '⏳ Guardando...');
+    try {
+      var updates = [
+        { clave: 'promo_activo', valor: String($('apromo-activo').checked) },
+        { clave: 'promo_titulo', valor: sanitizeLine($('apromo-titulo').value, 40) },
+        { clave: 'promo_subtitulo', valor: sanitizeLine($('apromo-subtitulo').value, 60) },
+        { clave: 'promo_vigencia', valor: sanitizeLine($('apromo-vigencia').value, 60) },
+        { clave: 'promo_precio', valor: String(Number($('apromo-precio').value) || COMBO_PRECIO_DEFAULT) }
+      ];
+      for (var i = 0; i < updates.length; i++) {
+        var r = await supabase.from('site_config').upsert(updates[i]);
+        if (r.error) throw r.error;
+      }
+      await loadAll();
+      renderPromo();
+      renderGrid();
+      renderCart();
+      showExportFeedback('apromo-feedback', '✓ Promoción guardada');
+    } catch (e) {
+      showExportFeedback('apromo-feedback', '⚠ Error: ' + (e.message || e));
+    }
+  }
+  $('apromo-save').addEventListener('click', savePromo);
+  $('apromo-reset').addEventListener('click', function () {
+    if (!confirm('¿Restablecer?')) return;
+    $('apromo-activo').checked = true;
+    $('apromo-titulo').value = '2× $300.000';
+    $('apromo-subtitulo').value = 'Combo de octubre';
+    $('apromo-vigencia').value = 'Cantidad limitada';
+    $('apromo-precio').value = 300000;
+    savePromo();
+  });
+
+  // ---- Textos ----
+  async function saveSite() {
+    if (!supabase) return;
+    showExportFeedback('as-feedback', '⏳ Guardando...');
+    try {
+      var updates = [
+        { clave: 'hero_h1', valor: $('as-hero-h1').value },
+        { clave: 'hero_lead', valor: $('as-hero-lead').value },
+        { clave: 'nosotros_texto', valor: $('as-nos-texto').value },
+        { clave: 'instagram', valor: $('as-ig').value }
+      ];
+      for (var i = 0; i < updates.length; i++) {
+        var r = await supabase.from('site_config').upsert(updates[i]);
+        if (r.error) throw r.error;
+      }
+      await loadAll();
+      renderSite();
+      showExportFeedback('as-feedback', '✓ Textos guardados');
+    } catch (e) {
+      showExportFeedback('as-feedback', '⚠ Error: ' + (e.message || e));
+    }
+  }
+  $('as-save').addEventListener('click', saveSite);
+
+  // ---- Tabs ----
+  document.querySelectorAll('.admin-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var target = tab.dataset.tab;
+      document.querySelectorAll('.admin-tab').forEach(function (t) { t.setAttribute('aria-pressed', String(t === tab)); });
+      document.querySelectorAll('.admin-tab-panel').forEach(function (p) {
+        p.classList.toggle('on', p.dataset.panel === target);
+      });
+    });
+  });
+
+  // ---- Login ----
+  var dadmin = $('dadmin');
+  var adminBtn = $('adminbtn');
+  if (adminBtn && dadmin) {
+    adminBtn.addEventListener('click', async function () {
+      // Verificar si ya hay sesión
+      if (supabase) {
+        var sess = await supabase.auth.getSession();
+        if (sess && sess.data && sess.data.session) {
+          currentUser = sess.data.session.user;
+          showAdminPanel();
+          if (typeof dadmin.showModal === 'function') dadmin.showModal();
+          return;
+        }
+      }
+      showAdminLogin();
+      if (typeof dadmin.showModal === 'function') dadmin.showModal();
+    });
+
+    var adminForm = $('admin-form');
+    if (adminForm) {
+      adminForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        if (!supabase) {
+          $('admin-error').textContent = 'Supabase no está configurado. Edita supabase-config.js.';
+          $('admin-error').hidden = false;
+          return;
+        }
+        var email = $('admin-email').value;
+        var password = $('admin-pass').value;
+        $('admin-error').hidden = true;
+        try {
+          var res = await supabase.auth.signInWithPassword({ email: email, password: password });
+          if (res.error) throw res.error;
+          currentUser = res.data.user;
+          showAdminPanel();
+          $('admin-email').value = '';
+          $('admin-pass').value = '';
+        } catch (err) {
+          $('admin-error').textContent = 'Email o contraseña incorrectos.';
+          $('admin-error').hidden = false;
+        }
+      });
+    }
+
+    // Logout
+    var logoutBtn = $('admin-logout');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', async function () {
+        await supabase.auth.signOut();
+        currentUser = null;
+        showAdminLogin();
+      });
+    }
   }
 
   function showExportFeedback(id, msg) {
@@ -960,57 +1112,15 @@
     setTimeout(function () { el.classList.remove('show'); }, 3000);
   }
 
-  function showFeedback(id) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    el.classList.add('show');
-    setTimeout(function () { el.classList.remove('show'); }, 1800);
-  }
-
-  // ---------- Filtros ----------
-  var FILTERS = ['Todos', 'Hombre', 'Mujer', 'Unisex'];
-
-  // ---------- Subir a GitHub (sincronización entre dispositivos) ----------
-  function buildDataJSON() {
-    return {
-      promo: {
-        activo: promo.activo,
-        titulo: promo.titulo,
-        subtitulo: promo.subtitulo,
-        vigencia: promo.vigencia,
-        precio: promo.precio
-      },
-      site: {
-        hero_h1: site.hero_h1,
-        hero_lead: site.hero_lead,
-        nosotros_texto: site.nosotros_texto,
-        instagram: site.instagram
-      },
-      productos: DATA.map(function (p) {
-        return {
-          n: p.n, t: p.t, h: p.h, img: p.img, desc: p.desc,
-          a: p.a, b: p.b, c: p.c,
-          precio: p.precio || 0,
-          presentacion: p.presentacion || ''
-        };
-      })
-    };
-  }
-
-  // Wrapper: guarda local Y sube a GitHub
-  function saveAndSync(localKey, localData, commitMsg) {
-    saveJSON(localKey, localData);
-    var json = JSON.stringify(buildDataJSON(), null, 2);
-    return uploadToGitHub(json, commitMsg);
-  }
-
-  // ---------- Inicialización ----------
-  loadRemote().then(function () {
-    applyLocalOverrides();
-    renderPromo();
-    renderSite();
-    renderFilters();
+  // ============================================================
+  //                    INICIALIZACIÓN
+  // ============================================================
+  renderFilters();
+  renderPromo();
+  renderSite();
+  loadAll().then(function () {
     renderGrid();
     renderCart();
+    renderWAFAB();
   });
 })();

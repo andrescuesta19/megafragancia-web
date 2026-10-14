@@ -336,14 +336,16 @@
     </header>
     <div class="dlg-body">
       <div id="admin-login">
-        <p class="nsub">Ingresa la clave para acceder al panel.</p>
+        <p class="nsub">Ingresa tu email y contraseña para acceder al panel.</p>
         <form id="admin-form" class="admin-form" autocomplete="off">
-          <label for="admin-pass" class="sr-only">Clave de acceso</label>
-          <input type="password" id="admin-pass" placeholder="Clave" required>
+          <label for="admin-email" class="sr-only">Email</label>
+          <input type="email" id="admin-email" placeholder="Email" required style="flex: 1 1 100%; margin-bottom: 8px;">
+          <label for="admin-pass" class="sr-only">Contraseña</label>
+          <input type="password" id="admin-pass" placeholder="Contraseña" required style="flex: 1;">
           <button class="btn" type="submit">Entrar</button>
         </form>
-        <p id="admin-error" class="admin-err" hidden>Clave incorrecta.</p>
-        <p class="admin-hint">¿No tienes clave? Contacta al desarrollador.</p>
+        <p id="admin-error" class="admin-err" hidden>Email o contraseña incorrectos.</p>
+        <p class="admin-hint">La autenticación se hace con Supabase. El usuario se crea una sola vez en el dashboard de Supabase.</p>
       </div>
 
       <div id="admin-panel" hidden>
@@ -351,6 +353,7 @@
           <button class="admin-tab" data-tab="promo" aria-pressed="true" type="button">Promo</button>
           <button class="admin-tab" data-tab="productos" aria-pressed="false" type="button">Productos</button>
           <button class="admin-tab" data-tab="sitio" aria-pressed="false" type="button">Textos</button>
+          <button class="adminbtn" id="admin-logout" type="button" style="margin-left:auto;" title="Cerrar sesión">⎋</button>
         </div>
 
         <div style="background: var(--gold-bg); border: 1px solid var(--line-2); border-radius: 10px; padding: 12px 14px; margin-bottom: 18px; font: 500 .85rem var(--sans); color: var(--text);">
@@ -437,15 +440,16 @@
               <input type="text" id="np-fondo" placeholder="Vainilla, Pachulí">
             </div>
             <div class="admin-field">
-              <label>Imagen del producto</label>
+              <label>Fotos y videos del producto (puedes agregar varios)</label>
               <label class="admin-file-label">
-                <input type="file" id="np-file" accept="image/*">
-                📷 Subir imagen
+                <input type="file" id="np-files" accept="image/*,video/*" multiple>
+                📷 Subir fotos / videos
               </label>
-              <div class="admin-img-preview" id="np-preview">Sin imagen</div>
+              <div class="admin-gallery-preview" id="np-preview"></div>
             </div>
             <div class="admin-actions">
               <button class="btn" id="np-save" type="button">Agregar producto</button>
+              <button class="btn ghost" id="np-cancel" type="button" style="display:none;">Cancelar</button>
               <span class="save-feedback" id="np-feedback">✓ Guardado</span>
             </div>
           </details>
@@ -485,6 +489,8 @@
     </div>
   </dialog>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
   <script src="app.js" defer></script>
 </body>
 </html>
