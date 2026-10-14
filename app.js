@@ -1,41 +1,64 @@
 /* ==========================================================
-   Mega Fragancia — App con Supabase
-   - Productos, fotos y videos en Supabase (no data.json)
-   - Auth con email/password (Supabase Auth)
-   - Sincronización automática en tiempo real entre dispositivos
-   - Carrito en localStorage (por dispositivo)
+   Mega Fragancia — Frontend conectado al backend
    ========================================================== */
 
 (function () {
   'use strict';
 
-  // ---------- Configuración ----------
+  // Configuración del backend (Render)
+  var API_BASE = (function () {
+    // Si hay un config en window, usarlo
+    if (window.MEGA_FRAG_CONFIG && window.MEGA_FRAG_CONFIG.apiBase) {
+      return window.MEGA_FRAG_CONFIG.apiBase;
+    }
+    // Default: el backend en Render (CAMBIAR después del deploy)
+    return 'https://megafragancia-backend-XXXX.onrender.com';
+  })();
+
   var WHATSAPP_DEFAULT = '573106399810';
   var COMBO_PRECIO_DEFAULT = 300000;
 
-  // ---------- Supabase ----------
-  var cfg = window.SUPABASE_CONFIG || {};
-  var supabase = null;
-  var currentUser = null;
-  var BUCKET = 'media';
+  // ---------- Estado ----------
+  var DATA = [];
+  var promo = { activo: true, titulo: '2× $300.000', subtitulo: 'Combo de octubre', vigencia: 'Cantidad limitada', precio: 300000 };
+  var site = {
+    hero_h1: 'Perfumes árabes<br>y de nicho · <em>100% originales</em>',
+    hero_lead: 'Elige tus fragancias, arma tu combo y paga solo cuando lo recibes.',
+    nosotros_texto: '',
+    instagram: 'https://www.instagram.com/mega.fragancia7/',
+    whatsapp: WHATSAPP_DEFAULT
+  };
+  var WHATSAPP = WHATSAPP_DEFAULT;
+  var COMBO_PRECIO = COMBO_PRECIO_DEFAULT;
+  var active = 'Todos';
+  var search = '';
+  var productToOpen = null;
+  var mediaToOpen = [];
+  var activeMediaIndex = 0;
+  var authToken = null;
+  var editingProductId = null;
+  var editingMediaFiles = []; // archivos pendientes en el form (File objects)
+  var editingExistingMedia = []; // media existente cuando se edita
 
-  function isConfigured() {
-    return cfg && cfg.url && cfg.anonKey &&
-           cfg.url.indexOf('TU-PROYECTO') === -1 &&
-           cfg.anonKey.indexOf('TU-ANON-KEY') === -1;
-  }
-
-  if (isConfigured()) {
+  // Carrito (local)
+  var cart = loadCart();
+  function loadCart() {
     try {
-      supabase = window.supabase.createClient(cfg.url, cfg.anonKey, {
-        auth: { persistSession: true, autoRefreshToken: true }
+      var raw = localStorage.getItem('mf_cart');
+      var c = raw ? JSON.parse(raw) : {};
+      var out = {};
+      Object.keys(c).forEach(function (k) {
+        var v = Number(c[k]);
+        if (Number.isInteger(v) && v > 0 && v <= 20) out[k] = v;
       });
-    } catch (e) {
-      console.error('Error inicializando Supabase:', e);
-    }
+      return out;
+    } catch (e) { return {}; }
+  }
+  function saveCart() {
+    try { localStorage.setItem('mf_cart', JSON.stringify(cart)); } catch (e) {}
   }
 
-  // ---------- Helpers ----------
+  // ---------- API client ----------
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, txt) {
     var e = document.createElement(tag);
@@ -51,7 +74,67 @@
   }
   function isValidWhatsApp(num) { return /^\d{10,15}$/.test(num); }
 
-  // SVG seguro de frasco (fallback)
+  function apiGet(path) {
+    return fetch(API_BASE + path).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
+  }
+  function apiPost(path, body) {
+    return fetch(API_BASE + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); });
+  }
+  function apiPut(path, body) {
+    return fetch(API_BASE + path, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); });
+  }
+  function apiDelete(path) {
+    return fetch(API_BASE + path, { method: 'DELETE' }).then(function (r) { return r.json(); });
+  }
+  function apiPostAuth(path, body) {
+    return fetch(API_BASE + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); });
+  }
+  function apiPutAuth(path, body) {
+    return fetch(API_BASE + path, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); });
+  }
+  function apiDeleteAuth(path) {
+    return fetch(API_BASE + path, {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + authToken }
+    }).then(function (r) { return r.json(); });
+  }
+
+  // Subida multipart con token
+  function apiPostMultipart(path, formData) {
+    return fetch(API_BASE + path, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + authToken },
+      body: formData
+    }).then(function (r) { return r.json(); });
+  }
+  function apiPutMultipart(path, formData) {
+    return fetch(API_BASE + path, {
+      method: 'PUT',
+      headers: { 'Authorization': 'Bearer ' + authToken },
+      body: formData
+    }).then(function (r) { return r.json(); });
+  }
+
+  // ---------- SVG fallback ----------
   function buildBottleSVG(hue) {
     var h = Math.floor(Number(hue));
     if (!Number.isFinite(h) || h < 0 || h > 360) h = 38;
@@ -64,13 +147,11 @@
     var grad = document.createElementNS(NS, 'linearGradient');
     var gradId = 'g' + h + '-' + Math.random().toString(36).slice(2, 8);
     grad.setAttribute('id', gradId);
-    grad.setAttribute('x1', '0'); grad.setAttribute('y1', '0');
-    grad.setAttribute('x2', '1'); grad.setAttribute('y2', '1');
-    var stop1 = document.createElementNS(NS, 'stop');
-    stop1.setAttribute('offset', '0'); stop1.setAttribute('stop-color', 'hsl(' + h + ', 35%, 60%)');
-    var stop2 = document.createElement(NS, 'stop');
-    stop2.setAttribute('offset', '1'); stop2.setAttribute('stop-color', 'hsl(' + h + ', 28%, 35%)');
-    grad.appendChild(stop1); grad.appendChild(stop2);
+    var s1 = document.createElementNS(NS, 'stop');
+    s1.setAttribute('offset', '0'); s1.setAttribute('stop-color', 'hsl(' + h + ', 35%, 60%)');
+    var s2 = document.createElementNS(NS, 'stop');
+    s2.setAttribute('offset', '1'); s2.setAttribute('stop-color', 'hsl(' + h + ', 28%, 35%)');
+    grad.appendChild(s1); grad.appendChild(s2);
     defs.appendChild(grad); svg.appendChild(defs);
     var cap = document.createElementNS(NS, 'rect');
     cap.setAttribute('x', '46'); cap.setAttribute('y', '6');
@@ -87,57 +168,10 @@
     body.setAttribute('width', '84'); body.setAttribute('height', '128');
     body.setAttribute('rx', '18'); body.setAttribute('fill', 'url(#' + gradId + ')');
     svg.appendChild(body);
-    var shine = document.createElementNS(NS, 'rect');
-    shine.setAttribute('x', '28'); shine.setAttribute('y', '56');
-    shine.setAttribute('width', '12'); shine.setAttribute('height', '100');
-    shine.setAttribute('rx', '6'); shine.setAttribute('fill', '#fff');
-    shine.setAttribute('opacity', '0.18');
-    svg.appendChild(shine);
     return svg;
   }
 
-  // ---------- Estado en memoria ----------
-  var DATA = [];
-  var promo = { activo: true, titulo: '2× $300.000', subtitulo: 'Combo de octubre', vigencia: 'Cantidad limitada', precio: 300000 };
-  var site = {
-    hero_h1: 'Perfumes árabes<br>y de nicho · <em>100% originales</em>',
-    hero_lead: 'Elige tus fragancias, arma tu combo y paga solo cuando lo recibes.',
-    nosotros_texto: '',
-    instagram: 'https://www.instagram.com/mega.fragancia7/',
-    whatsapp: WHATSAPP_DEFAULT
-  };
-  var WHATSAPP = WHATSAPP_DEFAULT;
-  var COMBO_PRECIO = COMBO_PRECIO_DEFAULT;
-  var active = 'Todos';
-  var search = '';
-  var productToOpen = null;
-  var mediaToOpen = []; // galería del producto abierto
-  var activeMediaIndex = 0;
-  var editingMedia = []; // archivos pendientes en el admin
-  var editingProductId = null;
-
-  // Carrito (local)
-  var cart = {};
-  function loadCart() {
-    try {
-      var raw = localStorage.getItem('mf_cart');
-      if (!raw) return {};
-      var c = JSON.parse(raw);
-      if (!c || typeof c !== 'object') return {};
-      var out = {};
-      Object.keys(c).forEach(function (k) {
-        var v = Number(c[k]);
-        if (Number.isInteger(v) && v > 0 && v <= 20) out[k] = v;
-      });
-      return out;
-    } catch (e) { return {}; }
-  }
-  function saveCart() {
-    try { localStorage.setItem('mf_cart', JSON.stringify(cart)); } catch (e) {}
-  }
-  cart = loadCart();
-
-  // ---------- Cargar datos desde Supabase ----------
+  // ---------- Cargar datos ----------
   function showError(msg) {
     var banner = document.getElementById('error-banner');
     if (!banner) {
@@ -148,29 +182,15 @@
     }
     banner.textContent = msg;
   }
-
   function clearError() {
-    var banner = document.getElementById('error-banner');
-    if (banner) banner.remove();
+    var b = document.getElementById('error-banner');
+    if (b) b.remove();
   }
 
   async function loadAll() {
-    if (!supabase) {
-      showError('Supabase no está configurado. Edita supabase-config.js con tu URL y anon key.');
-      return;
-    }
-
     try {
-      // Cargar productos + sus medias
-      var prodsRes = await supabase
-        .from('productos')
-        .select('*, producto_media(*)')
-        .eq('activo', true)
-        .order('created_at', { ascending: true });
-
-      if (prodsRes.error) throw prodsRes.error;
-
-      DATA = (prodsRes.data || []).map(function (p) {
+      var prods = await apiGet('/api/productos');
+      DATA = prods.map(function (p) {
         return {
           id: p.id,
           n: p.nombre,
@@ -182,41 +202,34 @@
           b: p.notas_corazon || [],
           c: p.notas_fondo || [],
           h: p.color_h || 38,
-          media: (p.producto_media || [])
-            .sort(function (x, y) { return (x.orden || 0) - (y.orden || 0); })
-            .map(function (m) { return { url: m.url, tipo: m.tipo, es_portada: m.es_portada }; })
+          media: (p.media || []).map(function (m) { return { id: m.id, url: m.url, tipo: m.tipo, es_portada: m.es_portada, orden: m.orden }; })
         };
       });
 
-      // Cargar configuración del sitio
-      var cfgRes = await supabase.from('site_config').select('*');
-      if (cfgRes.error) throw cfgRes.error;
-      var cfgMap = {};
-      (cfgRes.data || []).forEach(function (r) { cfgMap[r.clave] = r.valor; });
-
+      var cfg = await apiGet('/api/config');
       promo = {
-        activo: cfgMap.promo_activo !== 'false',
-        titulo: cfgMap.promo_titulo || promo.titulo,
-        subtitulo: cfgMap.promo_subtitulo || promo.subtitulo,
-        vigencia: cfgMap.promo_vigencia || promo.vigencia,
-        precio: Number(cfgMap.promo_precio) || COMBO_PRECIO_DEFAULT
+        activo: cfg.promo_activo !== 'false',
+        titulo: cfg.promo_titulo || promo.titulo,
+        subtitulo: cfg.promo_subtitulo || promo.subtitulo,
+        vigencia: cfg.promo_vigencia || promo.vigencia,
+        precio: Number(cfg.promo_precio) || COMBO_PRECIO_DEFAULT
       };
       COMBO_PRECIO = promo.precio;
-      site.hero_h1 = cfgMap.hero_h1 || site.hero_h1;
-      site.hero_lead = cfgMap.hero_lead || site.hero_lead;
-      site.nosotros_texto = cfgMap.nosotros_texto || site.nosotros_texto;
-      site.instagram = cfgMap.instagram || site.instagram;
-      site.whatsapp = cfgMap.whatsapp || WHATSAPP_DEFAULT;
+      site.hero_h1 = cfg.hero_h1 || site.hero_h1;
+      site.hero_lead = cfg.hero_lead || site.hero_lead;
+      site.nosotros_texto = cfg.nosotros_texto || site.nosotros_texto;
+      site.instagram = cfg.instagram || site.instagram;
+      site.whatsapp = cfg.whatsapp || WHATSAPP_DEFAULT;
       WHATSAPP = site.whatsapp;
 
       clearError();
     } catch (e) {
       console.error('Error cargando datos:', e);
-      showError('Error cargando datos: ' + (e.message || e));
+      showError('Error cargando datos del backend. Verifica que esté corriendo en ' + API_BASE);
     }
   }
 
-  // ---------- Render productos ----------
+  // ---------- Render ----------
   function renderFilters() {
     var fbox = $('filters');
     fbox.textContent = '';
@@ -251,7 +264,6 @@
       if (q && p.n.toLowerCase().indexOf(q) === -1) return false;
       return true;
     });
-
     if (!visible.length) { empty.hidden = false; return; }
     empty.hidden = true;
 
@@ -269,51 +281,40 @@
       if (cover) {
         if (cover.tipo === 'video') {
           var v = document.createElement('video');
-          v.src = cover.url;
-          v.muted = true;
-          v.loop = true;
-          v.autoplay = true;
-          v.playsInline = true;
-          v.style.maxHeight = '200px';
-          v.style.width = 'auto';
+          v.src = cover.url; v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true;
+          v.style.maxHeight = '200px'; v.style.width = 'auto';
           wrap.appendChild(v);
         } else {
           var img = document.createElement('img');
-          img.src = cover.url;
-          img.alt = p.n;
-          img.loading = 'lazy';
+          img.src = cover.url; img.alt = p.n; img.loading = 'lazy';
           wrap.appendChild(img);
         }
       } else {
         wrap.appendChild(buildBottleSVG(p.h));
       }
 
-      // Thumbs si hay más de 1
       if (p.media && p.media.length > 1) {
         var thumbs = el('div', 'gallery-thumbs');
         p.media.slice(0, 4).forEach(function (m) {
           var t = el('div', 'gallery-thumb');
           if (m.tipo === 'video') {
             var vt = document.createElement('video');
-            vt.src = m.url;
-            vt.muted = true;
+            vt.src = m.url; vt.muted = true;
             t.appendChild(vt);
           } else {
             var ti = document.createElement('img');
-            ti.src = m.url;
-            ti.alt = '';
+            ti.src = m.url; ti.alt = '';
             t.appendChild(ti);
           }
           thumbs.appendChild(t);
         });
         wrap.appendChild(thumbs);
       }
-
       card.appendChild(wrap);
 
       var body = el('div', 'body');
       body.appendChild(el('h3', '', p.n));
-      body.appendChild(el('p', 'desc', p.desc || 'Fragancia de la colección de la temporada.'));
+      body.appendChild(el('p', 'desc', p.desc || 'Fragancia de la colección.'));
 
       var price = el('div', 'price');
       if (p.precio > 0) {
@@ -358,7 +359,6 @@
     mediaToOpen = (p.media || []).slice();
     activeMediaIndex = 0;
     $('dp-title').textContent = p.n;
-
     renderDetailContent();
     if (typeof $('dproduct').showModal === 'function') $('dproduct').showModal();
   }
@@ -369,27 +369,18 @@
     var content = $('dp-content');
     content.textContent = '';
 
-    // Imagen/video principal
     var imgWrap = el('div', 'pd-image');
     var main = mediaToOpen[activeMediaIndex];
     if (main) {
       if (main.tipo === 'video') {
         var v = document.createElement('video');
-        v.src = main.url;
-        v.controls = true;
-        v.autoplay = true;
-        v.muted = true;
-        v.loop = true;
-        v.style.maxWidth = '90%';
-        v.style.maxHeight = '90%';
+        v.src = main.url; v.controls = true; v.autoplay = true; v.muted = true; v.loop = true;
+        v.style.maxWidth = '90%'; v.style.maxHeight = '90%';
         imgWrap.appendChild(v);
       } else {
         var img = document.createElement('img');
-        img.src = main.url;
-        img.alt = p.n;
-        img.style.maxWidth = '90%';
-        img.style.maxHeight = '90%';
-        img.style.objectFit = 'contain';
+        img.src = main.url; img.alt = p.n;
+        img.style.maxWidth = '90%'; img.style.maxHeight = '90%'; img.style.objectFit = 'contain';
         imgWrap.appendChild(img);
       }
     } else {
@@ -400,7 +391,6 @@
     var info = el('div', 'pd-info');
     info.appendChild(el('h4', '', p.t));
     info.appendChild(el('h2', '', p.n));
-
     var price = el('div', 'price');
     if (p.precio > 0) {
       price.appendChild(document.createTextNode(fmt(p.precio)));
@@ -415,22 +405,19 @@
       price.appendChild(small);
     }
     info.appendChild(price);
-    info.appendChild(el('p', 'desc', p.desc || 'Fragancia de la colección de la temporada.'));
+    info.appendChild(el('p', 'desc', p.desc || 'Fragancia de la colección.'));
 
-    // Galería de miniaturas
     if (mediaToOpen.length > 1) {
       var gal = el('div', 'product-gallery');
       mediaToOpen.forEach(function (m, idx) {
         var it = el('div', 'gallery-item' + (idx === activeMediaIndex ? ' active' : ''));
         if (m.tipo === 'video') {
           var vt = document.createElement('video');
-          vt.src = m.url;
-          vt.muted = true;
+          vt.src = m.url; vt.muted = true;
           it.appendChild(vt);
         } else {
           var ti = document.createElement('img');
-          ti.src = m.url;
-          ti.alt = '';
+          ti.src = m.url; ti.alt = '';
           it.appendChild(ti);
         }
         it.addEventListener('click', function () {
@@ -441,7 +428,6 @@
       });
       info.appendChild(gal);
     }
-
     content.appendChild(info);
 
     $('dp-n1').textContent = (p.a || []).join(', ') || '—';
@@ -477,7 +463,6 @@
     var oSub = $('obar-sub');
     var oBtn = $('obar-btn');
 
-    // Purga huérfanos
     var validIds = {};
     DATA.forEach(function (p) { validIds[p.id] = p; });
     var changed = false;
@@ -511,13 +496,11 @@
         if (cover) {
           if (cover.tipo === 'video') {
             var vt = document.createElement('video');
-            vt.src = cover.url;
-            vt.muted = true;
+            vt.src = cover.url; vt.muted = true;
             mini.appendChild(vt);
           } else {
             var mi = document.createElement('img');
-            mi.src = cover.url;
-            mi.alt = '';
+            mi.src = cover.url; mi.alt = '';
             mini.appendChild(mi);
           }
         } else {
@@ -530,12 +513,10 @@
         var q = el('div', 'q');
         var m = el('button', '', '−');
         m.type = 'button';
-        m.setAttribute('aria-label', 'Quitar una de ' + p.n);
         m.addEventListener('click', function () { change(p, -1); });
         var c = el('span', 'num', String(cart[id]));
         var pl = el('button', '', '+');
         pl.type = 'button';
-        pl.setAttribute('aria-label', 'Añadir una de ' + p.n);
         pl.addEventListener('click', function () { change(p, 1); });
         q.appendChild(m); q.appendChild(c); q.appendChild(pl);
         r.appendChild(q);
@@ -544,7 +525,7 @@
     }
 
     csum.textContent = combos ? combos + ' × ' + fmt(COMBO_PRECIO) + ' = ' + fmt(combos * COMBO_PRECIO) : '';
-    chint.textContent = rem ? 'Te falta 1 fragancia para otro combo. El precio de fragancia suelta lo confirma el negocio por WhatsApp.' : '';
+    chint.textContent = rem ? 'Te falta 1 fragancia para otro combo.' : '';
 
     if (isValidWhatsApp(WHATSAPP)) {
       var lines = ids.map(function (id) {
@@ -570,33 +551,27 @@
     var fab = $('wa-fab');
     if (!fab) return;
     if (isValidWhatsApp(WHATSAPP)) {
-      fab.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, Mega Fragancia. Quiero información sobre sus perfumes.');
+      fab.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, Mega Fragancia.');
       fab.removeAttribute('aria-disabled');
-    } else {
-      fab.removeAttribute('href');
-    }
+    } else { fab.removeAttribute('href'); }
   }
-  renderWAFAB();
 
   var heroWa = $('hero-wa');
   if (heroWa && isValidWhatsApp(WHATSAPP)) {
-    heroWa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, Mega Fragancia. Quiero información sobre sus perfumes.');
+    heroWa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, Mega Fragancia.');
   }
   var nosotrosWa = $('nosotros-wa');
   if (nosotrosWa && isValidWhatsApp(WHATSAPP)) {
-    nosotrosWa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, Mega Fragancia. Quiero más información.');
+    nosotrosWa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, Mega Fragancia.');
   }
 
   // ---------- Buscador ----------
   var searchInput = $('search');
   if (searchInput) {
-    searchInput.addEventListener('input', function (e) {
-      search = e.target.value;
-      renderGrid();
-    });
+    searchInput.addEventListener('input', function (e) { search = e.target.value; renderGrid(); });
   }
 
-  // ---------- Render promo y textos ----------
+  // ---------- Promo y textos ----------
   function renderPromo() {
     var elTitulo = $('promo-titulo');
     if (!elTitulo) return;
@@ -605,10 +580,9 @@
       var elSub = $('promo-subtitulo');
       if (elSub) {
         elSub.textContent = '';
-        var parts = sanitizeLine(promo.subtitulo, 60).split('\n');
-        parts.forEach(function (p, i) {
+        sanitizeLine(promo.subtitulo, 60).split('\n').forEach(function (p, i, arr) {
           elSub.appendChild(document.createTextNode(p));
-          if (i < parts.length - 1) elSub.appendChild(document.createElement('br'));
+          if (i < arr.length - 1) elSub.appendChild(document.createElement('br'));
         });
       }
       var elVig = $('promo-vigencia');
@@ -650,7 +624,7 @@
     if (ig && site.instagram) ig.href = site.instagram;
   }
 
-  // ---------- Dialog handlers ----------
+  // ---------- Dialogs ----------
   document.addEventListener('click', function (e) {
     var t = e.target.closest && e.target.closest('#wa, #obar-btn');
     if (!t) return;
@@ -677,8 +651,7 @@
   });
   document.querySelectorAll('[data-dlg]').forEach(function (b) {
     b.addEventListener('click', function () {
-      var id = b.getAttribute('data-dlg');
-      var d = document.getElementById(id);
+      var d = document.getElementById(b.getAttribute('data-dlg'));
       if (d && typeof d.showModal === 'function') d.showModal();
     });
   });
@@ -702,7 +675,7 @@
   if (y) y.textContent = new Date().getFullYear();
 
   // ============================================================
-  //                      PANEL DE ADMINISTRACIÓN
+  //                  PANEL DE ADMINISTRACIÓN
   // ============================================================
 
   function showAdminLogin() {
@@ -736,7 +709,7 @@
       var li = el('li', 'admin-list-item');
       var info = el('div', 'info');
       info.appendChild(el('strong', '', p.n));
-      var sub = p.t + ' · ' + fmt(p.precio) + (p.presentacion ? ' · ' + p.presentacion : '');
+      var sub = p.t + ' · ' + fmt(p.precio) + (p.presentacion ? ' · ' + p.presentacion : '') + ' · ' + (p.media ? p.media.length : 0) + ' archivos';
       info.appendChild(el('small', '', sub));
       li.appendChild(info);
 
@@ -745,13 +718,11 @@
         var thumb = el('div', 'mini-thumb');
         if (cover.tipo === 'video') {
           var vt = document.createElement('video');
-          vt.src = cover.url;
-          vt.muted = true;
+          vt.src = cover.url; vt.muted = true;
           thumb.appendChild(vt);
         } else {
           var ti = document.createElement('img');
-          ti.src = cover.url;
-          ti.alt = '';
+          ti.src = cover.url; ti.alt = '';
           thumb.appendChild(ti);
         }
         li.appendChild(thumb);
@@ -771,26 +742,21 @@
     });
   }
 
-  // ---- Crear / editar producto ----
   var npFiles = $('np-files');
   if (npFiles) {
     npFiles.addEventListener('change', function (e) {
       Array.from(e.target.files).forEach(function (file) {
         if (file.size > 50 * 1024 * 1024) {
-          alert('"' + file.name + '" es demasiado grande. Máximo 50MB por archivo.');
+          alert('"' + file.name + '" es demasiado grande. Máximo 50MB.');
           return;
         }
-        var reader = new FileReader();
-        reader.onload = function (ev) {
-          editingMedia.push({
-            file: file,
-            dataUrl: ev.target.result,
-            tipo: file.type.indexOf('video') === 0 ? 'video' : 'imagen',
-            nombre: file.name
-          });
-          renderEditingMediaPreview();
-        };
-        reader.readAsDataURL(file);
+        editingMediaFiles.push({
+          file: file,
+          tipo: file.type.indexOf('video') === 0 ? 'video' : 'imagen',
+          nombre: file.name,
+          url: URL.createObjectURL(file)
+        });
+        renderEditingMediaPreview();
       });
       npFiles.value = '';
     });
@@ -800,30 +766,29 @@
     var prev = $('np-preview');
     if (!prev) return;
     prev.textContent = '';
-    if (!editingMedia.length) {
+    if (!editingMediaFiles.length) {
       prev.textContent = 'Sin archivos seleccionados';
       return;
     }
-    editingMedia.forEach(function (m, idx) {
+    editingMediaFiles.forEach(function (m, idx) {
       var item = el('div', 'preview-item');
       if (m.tipo === 'video') {
         var v = document.createElement('video');
-        v.src = m.dataUrl;
-        v.muted = true;
+        v.src = m.url; v.muted = true;
         item.appendChild(v);
       } else {
         var img = document.createElement('img');
-        img.src = m.dataUrl;
+        img.src = m.url;
         item.appendChild(img);
       }
-      var badge = el('span', 'badge', m.tipo === 'video' ? '▶ Video' : (idx === 0 ? '★ Portada' : '📷 Foto'));
+      var badge = el('span', 'badge', m.tipo === 'video' ? '▶ Video' : '📷 Foto');
       item.appendChild(badge);
       var rm = el('button', 'remove', '×');
       rm.type = 'button';
-      rm.title = 'Quitar';
       rm.addEventListener('click', function (e) {
         e.preventDefault();
-        editingMedia.splice(idx, 1);
+        URL.revokeObjectURL(editingMediaFiles[idx].url);
+        editingMediaFiles.splice(idx, 1);
         renderEditingMediaPreview();
       });
       item.appendChild(rm);
@@ -832,7 +797,8 @@
   }
 
   function resetEditForm() {
-    editingMedia = [];
+    editingMediaFiles.forEach(function (m) { URL.revokeObjectURL(m.url); });
+    editingMediaFiles = [];
     editingProductId = null;
     $('np-nombre').value = '';
     $('np-tipo').value = 'Unisex';
@@ -843,8 +809,8 @@
     $('np-corazon').value = '';
     $('np-fondo').value = '';
     renderEditingMediaPreview();
-    var lbl = $('np-save');
-    lbl.textContent = 'Agregar producto';
+    $('np-save').textContent = 'Agregar producto';
+    $('np-cancel').style.display = 'none';
   }
 
   function startEdit(p) {
@@ -857,7 +823,7 @@
     $('np-salida').value = (p.a || []).join(', ');
     $('np-corazon').value = (p.b || []).join(', ');
     $('np-fondo').value = (p.c || []).join(', ');
-    editingMedia = [];
+    editingMediaFiles = [];
     renderEditingMediaPreview();
     $('np-save').textContent = 'Guardar cambios';
     $('np-cancel').style.display = '';
@@ -866,69 +832,27 @@
   }
 
   async function saveProduct() {
-    if (!supabase) { alert('Supabase no configurado.'); return; }
     var nombre = sanitizeLine($('np-nombre').value, 60);
     if (!nombre) { alert('Ingresa un nombre.'); return; }
 
-    var data = {
-      nombre: nombre,
-      tipo: $('np-tipo').value,
-      descripcion: sanitizeLine($('np-desc').value, 500),
-      precio: Number($('np-precio').value) || 0,
-      presentacion: sanitizeLine($('np-presentacion').value, 30),
-      notas_salida: sanitizeLine($('np-salida').value, 200).split(',').map(function (s) { return s.trim(); }).filter(Boolean),
-      notas_corazon: sanitizeLine($('np-corazon').value, 200).split(',').map(function (s) { return s.trim(); }).filter(Boolean),
-      notas_fondo: sanitizeLine($('np-fondo').value, 200).split(',').map(function (s) { return s.trim(); }).filter(Boolean),
-      color_h: Math.floor(Math.random() * 360)
-    };
+    var fd = new FormData();
+    fd.append('nombre', nombre);
+    fd.append('tipo', $('np-tipo').value);
+    fd.append('descripcion', sanitizeLine($('np-desc').value, 500));
+    fd.append('precio', String(Number($('np-precio').value) || 0));
+    fd.append('presentacion', sanitizeLine($('np-presentacion').value, 30));
+    fd.append('notas_salida', JSON.stringify(sanitizeLine($('np-salida').value, 200).split(',').map(function (s) { return s.trim(); }).filter(Boolean)));
+    fd.append('notas_corazon', JSON.stringify(sanitizeLine($('np-corazon').value, 200).split(',').map(function (s) { return s.trim(); }).filter(Boolean)));
+    fd.append('notas_fondo', JSON.stringify(sanitizeLine($('np-fondo').value, 200).split(',').map(function (s) { return s.trim(); }).filter(Boolean)));
+    fd.append('color_h', String(Math.floor(Math.random() * 360)));
+    editingMediaFiles.forEach(function (m) { fd.append('files', m.file, m.nombre); });
 
-    showExportFeedback('np-feedback', '⏳ Guardando...');
+    showExportFeedback('np-feedback', '⏳ Subiendo...');
     try {
-      var productoId;
-      if (editingProductId) {
-        var upd = await supabase.from('productos').update(data).eq('id', editingProductId);
-        if (upd.error) throw upd.error;
-        productoId = editingProductId;
-      } else {
-        var ins = await supabase.from('productos').insert(data).select('id').single();
-        if (ins.error) throw ins.error;
-        productoId = ins.data.id;
-      }
-
-      // Subir archivos multimedia
-      if (editingMedia.length) {
-        for (var i = 0; i < editingMedia.length; i++) {
-          var m = editingMedia[i];
-          var ext = m.tipo === 'video' ? 'webm' : 'jpg';
-          var path = productoId + '/' + Date.now() + '_' + i + '.' + ext;
-          showExportFeedback('np-feedback', '⏳ Subiendo ' + (i + 1) + '/' + editingMedia.length + '...');
-
-          // Subir a Supabase Storage
-          var blob = await (await fetch(m.dataUrl)).blob();
-          var uploadRes = await supabase.storage.from(BUCKET).upload(path, blob, {
-            contentType: m.tipo === 'video' ? 'video/webm' : 'image/jpeg',
-            upsert: true
-          });
-          if (uploadRes.error) throw uploadRes.error;
-
-          // Obtener URL pública
-          var pubRes = supabase.storage.from(BUCKET).getPublicUrl(path);
-          var pubUrl = pubRes.data.publicUrl;
-
-          // Guardar referencia en producto_media
-          var mediaRow = {
-            producto_id: productoId,
-            url: pubUrl,
-            tipo: m.tipo,
-            es_portada: i === 0,
-            orden: i
-          };
-          var medRes = await supabase.from('producto_media').insert(mediaRow);
-          if (medRes.error) throw medRes.error;
-        }
-      }
-
-      // Recargar
+      var res = editingProductId
+        ? await apiPutMultipart('/api/admin/productos/' + editingProductId, fd)
+        : await apiPostMultipart('/api/admin/productos', fd);
+      if (res.error) throw new Error(res.error);
       await loadAll();
       renderPromo();
       renderSite();
@@ -936,31 +860,18 @@
       renderCart();
       renderProductsList();
       resetEditForm();
-      showExportFeedback('np-feedback', '✓ Producto guardado y sincronizado');
+      showExportFeedback('np-feedback', '✓ Producto guardado');
     } catch (e) {
-      console.error(e);
       showExportFeedback('np-feedback', '⚠ Error: ' + (e.message || e));
     }
   }
 
   async function deleteProduct(p) {
-    if (!supabase) return;
     if (!confirm('¿Eliminar "' + p.n + '"?')) return;
     showExportFeedback('np-feedback', '⏳ Eliminando...');
     try {
-      // Primero borrar los archivos del storage
-      if (p.media && p.media.length) {
-        var paths = p.media.map(function (m) {
-          var u = new URL(m.url);
-          return u.pathname.split('/storage/v1/object/public/' + BUCKET + '/')[1] || '';
-        }).filter(Boolean);
-        if (paths.length) {
-          await supabase.storage.from(BUCKET).remove(paths);
-        }
-      }
-      // Luego borrar el producto (cascade borra producto_media)
-      var del = await supabase.from('productos').delete().eq('id', p.id);
-      if (del.error) throw del.error;
+      var res = await apiDeleteAuth('/api/admin/productos/' + p.id);
+      if (res.error) throw new Error(res.error);
       await loadAll();
       renderGrid();
       renderCart();
@@ -977,22 +888,18 @@
     $('np-cancel').style.display = 'none';
   });
 
-  // ---- Promo ----
   async function savePromo() {
-    if (!supabase) return;
     showExportFeedback('apromo-feedback', '⏳ Guardando...');
     try {
-      var updates = [
-        { clave: 'promo_activo', valor: String($('apromo-activo').checked) },
-        { clave: 'promo_titulo', valor: sanitizeLine($('apromo-titulo').value, 40) },
-        { clave: 'promo_subtitulo', valor: sanitizeLine($('apromo-subtitulo').value, 60) },
-        { clave: 'promo_vigencia', valor: sanitizeLine($('apromo-vigencia').value, 60) },
-        { clave: 'promo_precio', valor: String(Number($('apromo-precio').value) || COMBO_PRECIO_DEFAULT) }
-      ];
-      for (var i = 0; i < updates.length; i++) {
-        var r = await supabase.from('site_config').upsert(updates[i]);
-        if (r.error) throw r.error;
-      }
+      var body = {
+        promo_activo: String($('apromo-activo').checked),
+        promo_titulo: sanitizeLine($('apromo-titulo').value, 40),
+        promo_subtitulo: sanitizeLine($('apromo-subtitulo').value, 60),
+        promo_vigencia: sanitizeLine($('apromo-vigencia').value, 60),
+        promo_precio: String(Number($('apromo-precio').value) || COMBO_PRECIO_DEFAULT)
+      };
+      var res = await apiPutAuth('/api/admin/config', body);
+      if (res.error) throw new Error(res.error);
       await loadAll();
       renderPromo();
       renderGrid();
@@ -1013,21 +920,17 @@
     savePromo();
   });
 
-  // ---- Textos ----
-  async function saveSite() {
-    if (!supabase) return;
+  async function saveSiteTexts() {
     showExportFeedback('as-feedback', '⏳ Guardando...');
     try {
-      var updates = [
-        { clave: 'hero_h1', valor: $('as-hero-h1').value },
-        { clave: 'hero_lead', valor: $('as-hero-lead').value },
-        { clave: 'nosotros_texto', valor: $('as-nos-texto').value },
-        { clave: 'instagram', valor: $('as-ig').value }
-      ];
-      for (var i = 0; i < updates.length; i++) {
-        var r = await supabase.from('site_config').upsert(updates[i]);
-        if (r.error) throw r.error;
-      }
+      var body = {
+        hero_h1: $('as-hero-h1').value,
+        hero_lead: $('as-hero-lead').value,
+        nosotros_texto: $('as-nos-texto').value,
+        instagram: $('as-ig').value
+      };
+      var res = await apiPutAuth('/api/admin/config', body);
+      if (res.error) throw new Error(res.error);
       await loadAll();
       renderSite();
       showExportFeedback('as-feedback', '✓ Textos guardados');
@@ -1035,9 +938,8 @@
       showExportFeedback('as-feedback', '⚠ Error: ' + (e.message || e));
     }
   }
-  $('as-save').addEventListener('click', saveSite);
+  $('as-save').addEventListener('click', saveSiteTexts);
 
-  // ---- Tabs ----
   document.querySelectorAll('.admin-tab').forEach(function (tab) {
     tab.addEventListener('click', function () {
       var target = tab.dataset.tab;
@@ -1048,22 +950,15 @@
     });
   });
 
-  // ---- Login ----
   var dadmin = $('dadmin');
   var adminBtn = $('adminbtn');
   if (adminBtn && dadmin) {
-    adminBtn.addEventListener('click', async function () {
-      // Verificar si ya hay sesión
-      if (supabase) {
-        var sess = await supabase.auth.getSession();
-        if (sess && sess.data && sess.data.session) {
-          currentUser = sess.data.session.user;
-          showAdminPanel();
-          if (typeof dadmin.showModal === 'function') dadmin.showModal();
-          return;
-        }
+    adminBtn.addEventListener('click', function () {
+      if (authToken) {
+        showAdminPanel();
+      } else {
+        showAdminLogin();
       }
-      showAdminLogin();
       if (typeof dadmin.showModal === 'function') dadmin.showModal();
     });
 
@@ -1071,18 +966,13 @@
     if (adminForm) {
       adminForm.addEventListener('submit', async function (e) {
         e.preventDefault();
-        if (!supabase) {
-          $('admin-error').textContent = 'Supabase no está configurado. Edita supabase-config.js.';
-          $('admin-error').hidden = false;
-          return;
-        }
         var email = $('admin-email').value;
         var password = $('admin-pass').value;
         $('admin-error').hidden = true;
         try {
-          var res = await supabase.auth.signInWithPassword({ email: email, password: password });
-          if (res.error) throw res.error;
-          currentUser = res.data.user;
+          var res = await apiPost('/api/auth/login', { email: email, password: password });
+          if (res.error) throw new Error(res.error);
+          authToken = res.token;
           showAdminPanel();
           $('admin-email').value = '';
           $('admin-pass').value = '';
@@ -1093,12 +983,10 @@
       });
     }
 
-    // Logout
     var logoutBtn = $('admin-logout');
     if (logoutBtn) {
-      logoutBtn.addEventListener('click', async function () {
-        await supabase.auth.signOut();
-        currentUser = null;
+      logoutBtn.addEventListener('click', function () {
+        authToken = null;
         showAdminLogin();
       });
     }
