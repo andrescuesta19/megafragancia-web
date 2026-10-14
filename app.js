@@ -22,7 +22,7 @@
   // Ver SETUP-GITHUB-TOKEN.md para instrucciones.
   var GITHUB_REPO = 'andrescuesta19/megafragancia-web';
   var GITHUB_BRANCH = 'main';
-  var GITHUB_TOKEN = ''; // Pegar aquí el Personal Access Token, o ingresarlo desde el admin
+  var GITHUB_TOKEN = ''; // El token se ingresa desde el panel admin (no se guarda en el código)
 
   function getToken() {
     if (GITHUB_TOKEN) return Promise.resolve(GITHUB_TOKEN);
@@ -103,7 +103,9 @@
       a: Array.isArray(p.a) ? p.a.slice(0, 6).map(String) : [],
       b: Array.isArray(p.b) ? p.b.slice(0, 6).map(String) : [],
       c: Array.isArray(p.c) ? p.c.slice(0, 6).map(String) : [],
-      img: typeof p.img === 'string' ? p.img.slice(0, 500) : ''
+      img: typeof p.img === 'string' ? p.img.slice(0, 500) : '',
+      precio: Number.isFinite(Number(p.precio)) && Number(p.precio) > 0 ? Number(p.precio) : 0,
+      presentacion: typeof p.presentacion === 'string' ? p.presentacion.slice(0, 30) : ''
     };
   }
 
@@ -376,9 +378,21 @@
       var body = el('div', 'body');
       body.appendChild(el('h3', '', p.n));
       body.appendChild(el('p', 'desc', p.desc || 'Fragancia de la colección de la temporada.'));
-      var price = el('div', 'price', fmt(Math.floor(COMBO_PRECIO / 2)) + ' c/u');
-      var small = el('small', '', 'o 2× ' + fmt(COMBO_PRECIO) + ' en combo');
-      price.appendChild(small);
+
+      // Precio y presentación
+      var price = el('div', 'price');
+      if (p.precio > 0) {
+        price.appendChild(document.createTextNode(fmt(p.precio)));
+        if (p.presentacion) {
+          var presSpan = document.createElement('small');
+          presSpan.textContent = ' · ' + p.presentacion;
+          price.appendChild(presSpan);
+        }
+      } else {
+        price.appendChild(document.createTextNode(fmt(Math.floor(COMBO_PRECIO / 2)) + ' c/u'));
+        var small = el('small', '', 'o 2× ' + fmt(COMBO_PRECIO) + ' en combo');
+        price.appendChild(small);
+      }
       body.appendChild(price);
 
       var row = el('div', 'row');
@@ -533,10 +547,22 @@
     info.appendChild(h4);
     var h2 = el('h2', '', p.n);
     info.appendChild(h2);
-    var price = el('div', 'price', fmt(Math.floor(COMBO_PRECIO / 2)) + ' c/u');
-    var small = el('small', '', 'o 2× ' + fmt(COMBO_PRECIO) + ' en combo');
-    price.appendChild(small);
+
+    var price = el('div', 'price');
+    if (p.precio > 0) {
+      price.appendChild(document.createTextNode(fmt(p.precio)));
+      if (p.presentacion) {
+        var presSpan = document.createElement('small');
+        presSpan.textContent = ' · ' + p.presentacion;
+        price.appendChild(presSpan);
+      }
+    } else {
+      price.appendChild(document.createTextNode(fmt(Math.floor(COMBO_PRECIO / 2)) + ' c/u'));
+      var small = el('small', '', 'o 2× ' + fmt(COMBO_PRECIO) + ' en combo');
+      price.appendChild(small);
+    }
     info.appendChild(price);
+
     var desc = el('p', 'desc', p.desc || 'Fragancia de la colección de la temporada.');
     info.appendChild(desc);
     content.appendChild(info);
@@ -765,10 +791,13 @@
     $('np-save').addEventListener('click', function () {
       var nombre = sanitizeLine($('np-nombre').value, 60);
       if (!nombre) { alert('Ingresa un nombre para el producto.'); return; }
+      var precio = Number($('np-precio').value);
       var newP = {
         n: nombre,
         t: $('np-tipo').value,
         h: Math.floor(Math.random() * 360),
+        precio: Number.isFinite(precio) && precio > 0 ? precio : 0,
+        presentacion: sanitizeLine($('np-presentacion').value, 30),
         desc: sanitizeLine($('np-desc').value, 200),
         a: sanitizeLine($('np-salida').value, 100).split(',').map(function (s) { return s.trim(); }).filter(Boolean),
         b: sanitizeLine($('np-corazon').value, 100).split(',').map(function (s) { return s.trim(); }).filter(Boolean),
@@ -779,6 +808,8 @@
       renderGrid();
       renderProductsList();
       $('np-nombre').value = '';
+      $('np-precio').value = '';
+      $('np-presentacion').value = '';
       $('np-desc').value = '';
       $('np-salida').value = '';
       $('np-corazon').value = '';
@@ -978,7 +1009,9 @@
       productos: DATA.map(function (p) {
         return {
           n: p.n, t: p.t, h: p.h, img: p.img, desc: p.desc,
-          a: p.a, b: p.b, c: p.c
+          a: p.a, b: p.b, c: p.c,
+          precio: p.precio || 0,
+          presentacion: p.presentacion || ''
         };
       })
     };

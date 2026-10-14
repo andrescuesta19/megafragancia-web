@@ -21,7 +21,9 @@
       "desc": "Cálido, especiado y envolvente. Ideal para noches frescas.",
       "a": ["Cardamomo", "Bergamota"],
       "b": ["Ámbar", "Rosa"],
-      "c": ["Vainilla", "Pachulí"]
+      "c": ["Vainilla", "Pachulí"],
+      "precio": 150000,
+      "presentacion": "100 ml"
     },
     {
       "n": "Oud Nocturno",
@@ -31,7 +33,9 @@
       "desc": "Profundo, ahumado y elegante. Un clásico de la perfumería árabe.",
       "a": ["Azafrán", "Pimienta"],
       "b": ["Oud", "Cuero"],
-      "c": ["Sándalo", "Almizcle"]
+      "c": ["Sándalo", "Almizcle"],
+      "precio": 180000,
+      "presentacion": "100 ml"
     },
     {
       "n": "Rosa del Desierto",
@@ -41,7 +45,9 @@
       "desc": "Floral, dulce y sofisticado. Para quien deja huella.",
       "a": ["Frambuesa", "Litchi"],
       "b": ["Rosa damascena", "Peonía"],
-      "c": ["Almizcle", "Ámbar"]
+      "c": ["Almizcle", "Ámbar"],
+      "precio": 150000,
+      "presentacion": "100 ml"
     },
     {
       "n": "Noche de Dátil",
@@ -51,7 +57,9 @@
       "desc": "Gourmand, oriental y memorable. Perfecto para regalar.",
       "a": ["Dátil", "Canela"],
       "b": ["Haba tonka", "Café"],
-      "c": ["Vainilla", "Madera"]
+      "c": ["Vainilla", "Madera"],
+      "precio": 165000,
+      "presentacion": "100 ml"
     },
     {
       "n": "Atlas Fresco",
@@ -61,7 +69,9 @@
       "desc": "Aromático, limpio y versátil. Para el día a día.",
       "a": ["Limón", "Menta"],
       "b": ["Lavanda", "Salvia"],
-      "c": ["Vetiver", "Cedro"]
+      "c": ["Vetiver", "Cedro"],
+      "precio": 140000,
+      "presentacion": "100 ml"
     },
     {
       "n": "Jazmín Dorado",
@@ -71,7 +81,9 @@
       "desc": "Floral blanco, solar y sofisticado. Elegancia en cada nota.",
       "a": ["Mandarina", "Pera"],
       "b": ["Jazmín", "Azahar"],
-      "c": ["Sándalo", "Vainilla"]
+      "c": ["Sándalo", "Vainilla"],
+      "precio": 155000,
+      "presentacion": "100 ml"
     }
   ]
 }
