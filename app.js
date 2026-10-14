@@ -16,6 +16,40 @@
   var COMBO_PRECIO_DEFAULT = 300000;
   var DATA_URL = 'data.json';
 
+  // ---------- GitHub sync ----------
+  // El admin guarda los cambios en data.json que está en el repo.
+  // Esto se hace con la GitHub API directamente desde el navegador.
+  // Ver SETUP-GITHUB-TOKEN.md para instrucciones.
+  var GITHUB_REPO = 'andrescuesta19/megafragancia-web';
+  var GITHUB_BRANCH = 'main';
+  var GITHUB_TOKEN = ''; // Pegar aquí el Personal Access Token, o ingresarlo desde el admin
+
+  function getToken() {
+    if (GITHUB_TOKEN) return Promise.resolve(GITHUB_TOKEN);
+    return Promise.resolve(loadJSON('mf_github_token', '') || '');
+  }
+
+  function saveTokenToLocal(t) {
+    if (!t) {
+      try { localStorage.removeItem('mf_github_token'); } catch (e) {}
+    } else {
+      saveJSON('mf_github_token', t);
+    }
+  }
+
+  // ---------- Helpers de almacenamiento local ----------
+  function loadJSON(key, fallback) {
+    try {
+      var raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      var p = JSON.parse(raw);
+      return p == null ? fallback : p;
+    } catch (e) { return fallback; }
+  }
+  function saveJSON(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+  }
+
   // ---------- Helpers de almacenamiento local ----------
   function loadJSON(key, fallback) {
     try {
@@ -677,22 +711,29 @@
         vigencia: sanitizeLine($('apromo-vigencia').value, 60) || PROMO_DEFAULT.vigencia,
         precio: (function () { var n = Number($('apromo-precio').value); return Number.isFinite(n) && n > 0 ? n : PROMO_DEFAULT.precio; })()
       };
-      saveJSON('mf_promo', promo);
       renderPromo();
       renderGrid();
       renderCart();
-      showExportFeedback('apromo-feedback', '✓ Promoción guardada');
+      showExportFeedback('apromo-feedback', '⏳ Guardando y sincronizando...');
+      saveAndSync('mf_promo', promo, 'Update promo from admin').then(function (r) {
+        if (r.ok) showExportFeedback('apromo-feedback', '✓ Guardado y sincronizado');
+        else if (r.error === 'no_token') showExportFeedback('apromo-feedback', '⚠ Guardado local. Configura el token de GitHub para sincronizar.');
+        else showExportFeedback('apromo-feedback', '⚠ Guardado local. Error al sincronizar: ' + r.error);
+      });
     });
 
     $('apromo-reset').addEventListener('click', function () {
       if (confirm('¿Restablecer la promoción a los valores por defecto?')) {
         promo = Object.assign({}, PROMO_DEFAULT);
-        saveJSON('mf_promo', promo);
         renderPromo();
         renderGrid();
         renderCart();
         fillPromoForm();
-        showExportFeedback('apromo-feedback', '✓ Promoción restablecida');
+        showExportFeedback('apromo-feedback', '⏳ Sincronizando...');
+        saveAndSync('mf_promo', promo, 'Reset promo').then(function (r) {
+          if (r.ok) showExportFeedback('apromo-feedback', '✓ Restablecido y sincronizado');
+          else showExportFeedback('apromo-feedback', '⚠ Restablecido local. ' + (r.error || ''));
+        });
       }
     });
 
@@ -735,7 +776,6 @@
         img: npImageData
       };
       DATA.push(newP);
-      saveJSON('mf_products', DATA);
       renderGrid();
       renderProductsList();
       $('np-nombre').value = '';
@@ -745,7 +785,12 @@
       $('np-fondo').value = '';
       npImageData = '';
       npPreview.textContent = 'Sin imagen';
-      showExportFeedback('np-feedback', '✓ Producto agregado');
+      showExportFeedback('np-feedback', '⏳ Guardando y sincronizando...');
+      saveAndSync('mf_products', DATA, 'Add product: ' + newP.n).then(function (r) {
+        if (r.ok) showExportFeedback('np-feedback', '✓ Producto guardado y sincronizado');
+        else if (r.error === 'no_token') showExportFeedback('np-feedback', '⚠ Guardado local. Configura el token para sincronizar.');
+        else showExportFeedback('np-feedback', '⚠ Guardado local. Error: ' + r.error);
+      });
     });
 
     // Textos
@@ -754,10 +799,18 @@
       site.hero_lead = sanitizeLine($('as-hero-lead').value, 500);
       site.nosotros_texto = sanitizeLine($('as-nos-texto').value, 1000);
       site.instagram = sanitizeLine($('as-ig').value, 200);
-      saveJSON('mf_site', site);
       renderSite();
-      showExportFeedback('as-feedback', '✓ Textos guardados');
+      showExportFeedback('as-feedback', '⏳ Guardando y sincronizando...');
+      saveAndSync('mf_site', site, 'Update site texts').then(function (r) {
+        if (r.ok) showExportFeedback('as-feedback', '✓ Guardado y sincronizado');
+        else if (r.error === 'no_token') showExportFeedback('as-feedback', '⚠ Guardado local. Configura el token para sincronizar.');
+        else showExportFeedback('as-feedback', '⚠ Guardado local. Error: ' + r.error);
+      });
     });
+
+    // Eliminar producto
+    // (override — ya estaba en renderProductsList, lo modifico arriba)
+    // El evento se reemplaza en renderProductsList usando saveAndSync
 
     // Recargar
     var reloadBtn = $('admin-reload');
@@ -776,6 +829,43 @@
         });
       });
     }
+
+    // Token de GitHub
+    var saveTokenBtn = $('save-token');
+    if (saveTokenBtn) {
+      saveTokenBtn.addEventListener('click', function () {
+        var t = sanitizeLine($('github-token').value, 100);
+        if (t) {
+          saveTokenToLocal(t);
+          GITHUB_TOKEN = t;
+          showExportFeedback('token-feedback', '✓ Token guardado. Ya puedes sincronizar.');
+          $('github-token').value = '';
+        } else {
+          showExportFeedback('token-feedback', '⚠ Ingresa un token válido');
+        }
+      });
+    }
+    var clearTokenBtn = $('clear-token');
+    if (clearTokenBtn) {
+      clearTokenBtn.addEventListener('click', function () {
+        if (confirm('¿Eliminar el token guardado?')) {
+          saveTokenToLocal('');
+          GITHUB_TOKEN = '';
+          showExportFeedback('token-feedback', '✓ Token eliminado');
+        }
+      });
+    }
+    // Mostrar/ocultar input de token según si hay token
+    getToken().then(function (t) {
+      var tokenSection = $('token-section');
+      if (tokenSection) {
+        if (t) {
+          tokenSection.innerHTML = '<p class="nsub" style="color: var(--ok);">✓ Token de GitHub configurado. Los cambios se sincronizan automáticamente.</p>';
+        } else {
+          // Mostrar el formulario de token
+        }
+      }
+    });
   }
 
   function showAdminLogin() {
@@ -831,14 +921,18 @@
       del.type = 'button';
       del.addEventListener('click', function () {
         if (confirm('¿Eliminar "' + p.n + '"?')) {
+          var deletedName = p.n;
           DATA.splice(idx, 1);
-          saveJSON('mf_products', DATA);
           delete cart[p.n];
           saveCart();
           renderGrid();
           renderCart();
           renderProductsList();
-          showExportFeedback('np-feedback', '✓ Producto eliminado');
+          showExportFeedback('np-feedback', '⏳ Sincronizando...');
+          saveAndSync('mf_products', DATA, 'Delete product: ' + deletedName).then(function (r) {
+            if (r.ok) showExportFeedback('np-feedback', '✓ Eliminado y sincronizado');
+            else showExportFeedback('np-feedback', '⚠ Eliminado local. ' + (r.error || ''));
+          });
         }
       });
       acts.appendChild(del);
@@ -865,13 +959,89 @@
   // ---------- Filtros ----------
   var FILTERS = ['Todos', 'Hombre', 'Mujer', 'Unisex'];
 
-  // ---------- Guardado en localStorage (cada dispositivo mantiene su propio estado) ----------
-  // Por ahora: el admin guarda en localStorage del navegador actual.
-  // Para sincronizar entre dispositivos, se debe recargar el sitio después de editar.
+  // ---------- Subir a GitHub (sincronización entre dispositivos) ----------
+  function buildDataJSON() {
+    return {
+      promo: {
+        activo: promo.activo,
+        titulo: promo.titulo,
+        subtitulo: promo.subtitulo,
+        vigencia: promo.vigencia,
+        precio: promo.precio
+      },
+      site: {
+        hero_h1: site.hero_h1,
+        hero_lead: site.hero_lead,
+        nosotros_texto: site.nosotros_texto,
+        instagram: site.instagram
+      },
+      productos: DATA.map(function (p) {
+        return {
+          n: p.n, t: p.t, h: p.h, img: p.img, desc: p.desc,
+          a: p.a, b: p.b, c: p.c
+        };
+      })
+    };
+  }
+
+  // Sube data.json a GitHub. Devuelve una Promise.
+  function uploadToGitHub(jsonStr, commitMsg) {
+    return getToken().then(function (token) {
+      if (!token) {
+        return { ok: false, error: 'no_token' };
+      }
+      var url = 'https://api.github.com/repos/' + GITHUB_REPO + '/contents/' + DATA_URL;
+      // Primero obtenemos el SHA actual del archivo (necesario para actualizar)
+      return fetch(url, {
+        headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
+      })
+        .then(function (r) {
+          if (!r.ok) {
+            if (r.status === 404) return { sha: null }; // archivo no existe aún
+            return r.json().then(function (e) { throw new Error(e.message || 'HTTP ' + r.status); });
+          }
+          return r.json();
+        })
+        .then(function (info) {
+          // Subimos el archivo
+          var body = {
+            message: commitMsg || 'Update data.json from admin',
+            branch: GITHUB_BRANCH,
+            content: btoa(unescape(encodeURIComponent(jsonStr)))
+          };
+          if (info && info.sha) body.sha = info.sha;
+          return fetch(url, {
+            method: 'PUT',
+            headers: {
+              'Authorization': 'token ' + token,
+              'Accept': 'application/vnd.github.v3+json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+          });
+        })
+        .then(function (r) {
+          if (!r.ok) {
+            return r.json().then(function (e) { return { ok: false, error: e.message || 'HTTP ' + r.status }; });
+          }
+          return { ok: true };
+        })
+        .catch(function (e) {
+          return { ok: false, error: e.message || 'Error de red' };
+        });
+    });
+  }
+
+  // Wrapper: guarda local Y sube a GitHub
+  function saveAndSync(localKey, localData, commitMsg) {
+    saveJSON(localKey, localData);
+    var json = JSON.stringify(buildDataJSON(), null, 2);
+    return uploadToGitHub(json, commitMsg);
+  }
 
   // ---------- Inicialización ----------
   loadRemote().then(function () {
-    applyLocalOverrides(); // Prioriza los cambios del admin en este navegador
+    applyLocalOverrides();
     renderPromo();
     renderSite();
     renderFilters();

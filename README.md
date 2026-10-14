@@ -1,74 +1,86 @@
 # Mega Fragancia — Landing
 
-Rediseño de la landing de Mega Fragancia (perfumes árabes y de nicho).
+Landing estática para Mega Fragancia (perfumes árabes y de nicho, Turbo, Antioquia).
+Sincronización automática entre dispositivos vía GitHub API.
+
+## Estado del proyecto
+
+- **Deploy:** Netlify (sirve archivos estáticos)
+- **Datos editables:** `data.json` (se actualiza vía GitHub API desde el panel admin)
+- **Carrito:** `localStorage` (por dispositivo — el carrito de cada visitante es local)
+- **Privacidad del repo:** PRIVADO (obligatorio, contiene datos del cliente)
 
 ## Estructura
 
 ```
 megafragancia/
 ├── index.html              # Página principal
-├── app.js                  # Lógica: carrito, WhatsApp, dialogs
-├── styles.css              # Estilos (paleta clara, sin colores saturados)
+├── app.js                  # Lógica: carrito, WhatsApp, dialogs, panel admin
+├── styles.css              # Estilos (paleta negra + dorado, degradado fluido)
+├── data.json               # Datos editables (promo, productos, textos)
 ├── _headers                # Cabeceras de seguridad para Netlify
-├── netlify.toml            # Config de build + headers
+├── netlify.toml            # Config de build
 ├── politicas/
-│   ├── privacidad.html     # Política de privacidad (Ley 1581/2012)
-│   └── terminos.html       # Términos y devoluciones (Estatuto del Consumidor)
+│   ├── privacidad.html     # Política de privacidad
+│   └── terminos.html       # Términos y devoluciones
 └── assets/
     ├── svg/
     │   ├── logo.svg
     │   └── favicon.svg
-    └── img/                # [Vacío: colocar aquí las fotos reales de los productos]
+    └── img/
+        ├── logo-original.jpg        # Logo real del cliente
+        ├── equipo/vendedor.jpg      # Foto del vendedor
+        └── productos/               # [Vacío: las fotos se suben desde el admin]
+```
+
+## Antes de publicar (checklist)
+
+- [ ] Configurar el GitHub Personal Access Token (ver `SETUP-GITHUB-TOKEN.md`)
+- [ ] Verificar que el número de WhatsApp en `app.js` línea 17 es `573106399810`
+- [ ] Personalizar los placeholders `[...]` en `index.html` y en las políticas
+- [ ] Reemplazar el logo placeholder si se tiene uno mejor
+- [ ] Validar las políticas con un abogado
+
+## Panel de administración
+
+El sitio incluye un panel admin (ícono de engranaje en el header) que permite:
+
+- **Promo:** activar/desactivar, cambiar título, subtítulo, vigencia, precio
+- **Productos:** agregar con foto desde el celular/computador, eliminar
+- **Textos:** editar el título del hero, descripción, texto de "Nosotros"
+
+**Clave por defecto:** `mega2026`
+
+**Sincronización:** cada vez que el cliente guarda algo, se sube automáticamente a GitHub.
+Después de unos segundos, todos los dispositivos ven el cambio.
+
+## Desarrollo local
+
+```bash
+# Servir con cualquier servidor estático
+python3 -m http.server 8000
+# Abre http://localhost:8000
 ```
 
 ## Despliegue
 
-1. Sube la carpeta a un nuevo repositorio de GitHub.
-2. En Netlify: **Add new site → Import an existing project** → conecta el repo.
-3. Build command: *(vacío)* · Publish directory: `.`
-4. Deploy. Netlify detecta automáticamente `_headers` y `netlify.toml`.
+El deploy es automático desde GitHub:
+1. Push a la rama `main`
+2. Netlify detecta el cambio y redespliega en 30-60 segundos
+3. El sitio se actualiza en `https://[nombre].netlify.app`
 
-## Antes de publicar
-
-- [ ] Verificar que el número de WhatsApp en `app.js` línea 15 es el correcto: actualmente `'573106399810'`.
-- [ ] Reemplazar el array `DATA` en `app.js` con los productos reales, incluyendo fotos en `assets/img/`.
-- [ ] Completar los campos entre corchetes `[...]` en `index.html` (responsable, ciudad, Razón social, NIT).
-- [ ] Reemplazar la foto placeholder de "Nosotros" en `index.html` por una foto real del equipo o local.
-- [ ] Reemplazar el logo placeholder en `assets/svg/logo.svg` por el logo real del cliente (ver `guia-logo.md`).
-- [ ] Validar las políticas de privacidad y términos con un abogado antes de quitar los marcadores `[A REVISAR POR ABOGADO]`.
-
-## Panel de administración
-
-El sitio incluye un panel admin (ícono de engranaje en el header) que permite al cliente:
-
-- Activar/desactivar la promoción del mes
-- Cambiar el título, subtítulo, vigencia y precio del combo
-- Los cambios se guardan en el navegador del cliente (localStorage)
-
-**Clave por defecto:** `mega2026`
-
-**⚠️ Para cambiar la clave:**
-
-1. Abre la consola del navegador en el sitio (F12 → Consola)
-2. Escribe: `simpleHash("tu_nueva_clave")` y copia el resultado
-3. En `app.js`, reemplaza el valor dentro de la función que calcula `EXPECTED_HASH` (busca la línea con `var s = 'mega2026';`)
-
-**Importante:** Esta NO es seguridad real. Es una barrera para evitar que el cliente toque la promo por error. El código es público. Para una solución más robusta en el futuro, mover a autenticación server-side.
-
-## Verificación post-deploy
+## Verificación de seguridad
 
 ```bash
-# Comprobar headers
-curl -I https://tusitio.netlify.app/
-
-# Debe mostrar, entre otros:
-#   Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
-#   X-Content-Type-Options: nosniff
-#   X-Frame-Options: DENY
-#   Content-Security-Policy: default-src 'none'; ...
+curl -I https://megafragancia.netlify.app/
 ```
 
-Probar el flujo completo:
-1. Agregar 2 fragancias al carrito.
-2. Click en "Pedir por WhatsApp" → debe abrir WhatsApp con el pedido pre-escrito.
-3. Verificar en DevTools → Application → Local Storage que `mf_cart` solo guarda nombres y cantidades.
+Debe mostrar:
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Content-Security-Policy: default-src 'none'; ...`
+
+## Soporte
+
+Para dudas o cambios, contactar al desarrollador: **Andrés Cuesta**.
