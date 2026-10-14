@@ -29,14 +29,21 @@
     precio: 300000
   };
 
-  // Catálogo editable. Reemplazar por productos reales con fotos en assets/img/.
-  // h: tono HSL para el color del frasco placeholder (0-360)
-  // img: ruta a foto real (opcional). Si no, se dibuja SVG.
+  // Catálogo editable. Reemplazar por productos reales con fotos en assets/img/productos/.
+  // Para cada producto:
+  //   n: nombre
+  //   t: tipo ('Hombre' | 'Mujer' | 'Unisex')
+  //   desc: descripción corta
+  //   a/b/c: notas de salida, corazón y fondo
+  //   img: ruta a la foto (opcional, ej: 'assets/img/productos/ambar-real.jpg')
+  //        Si no se especifica, se muestra un SVG placeholder con el color 'h' (HSL 0-360)
+  //   h: tono HSL para el SVG placeholder cuando no hay foto
   var DATA = [
     {
       n: 'Ámbar Real',
       t: 'Unisex',
       h: 38,
+      img: 'assets/img/productos/ambar-real.jpg',
       desc: 'Cálido, especiado y envolvente. Ideal para noches frescas.',
       a: ['Cardamomo', 'Bergamota'],
       b: ['Ámbar', 'Rosa'],
@@ -46,6 +53,7 @@
       n: 'Oud Nocturno',
       t: 'Hombre',
       h: 260,
+      img: 'assets/img/productos/oud-nocturno.jpg',
       desc: 'Profundo, ahumado y elegante. Un clásico de la perfumería árabe.',
       a: ['Azafrán', 'Pimienta'],
       b: ['Oud', 'Cuero'],
@@ -55,6 +63,7 @@
       n: 'Rosa del Desierto',
       t: 'Mujer',
       h: 340,
+      img: 'assets/img/productos/rosa-del-desierto.jpg',
       desc: 'Floral, dulce y sofisticado. Para quien deja huella.',
       a: ['Frambuesa', 'Litchi'],
       b: ['Rosa damascena', 'Peonía'],
@@ -64,6 +73,7 @@
       n: 'Noche de Dátil',
       t: 'Unisex',
       h: 28,
+      img: 'assets/img/productos/noche-de-dtil.jpg',
       desc: 'Gourmand, oriental y memorable. Perfecto para regalar.',
       a: ['Dátil', 'Canela'],
       b: ['Haba tonka', 'Café'],
@@ -73,6 +83,7 @@
       n: 'Atlas Fresco',
       t: 'Hombre',
       h: 200,
+      img: 'assets/img/productos/atlas-fresco.jpg',
       desc: 'Aromático, limpio y versátil. Para el día a día.',
       a: ['Limón', 'Menta'],
       b: ['Lavanda', 'Salvia'],
@@ -82,6 +93,7 @@
       n: 'Jazmín Dorado',
       t: 'Mujer',
       h: 48,
+      img: 'assets/img/productos/jazmin-dorado.jpg',
       desc: 'Floral blanco, solar y sofisticado. Elegancia en cada nota.',
       a: ['Mandarina', 'Pera'],
       b: ['Jazmín', 'Azahar'],
@@ -318,7 +330,21 @@
       tagRow.appendChild(tagCat);
       tagRow.appendChild(tagCom);
       wrap.appendChild(tagRow);
-      wrap.appendChild(buildBottleSVG(p.h));
+
+      // Si tiene imagen, mostrarla. Si no, fallback al SVG placeholder.
+      if (p.img) {
+        var img = document.createElement('img');
+        img.src = p.img;
+        img.alt = p.n;
+        img.loading = 'lazy';
+        img.onerror = function () {
+          // Si la imagen no existe, mostrar SVG placeholder
+          this.parentNode.replaceChild(buildBottleSVG(p.h), this);
+        };
+        wrap.appendChild(img);
+      } else {
+        wrap.appendChild(buildBottleSVG(p.h));
+      }
       card.appendChild(wrap);
 
       // Body
@@ -407,11 +433,22 @@
         var r = el('div', 'crow');
         var left = el('div', 'name');
         var mini = el('div', 'mini');
-        // Diferenciar visualmente cada fragancia con el tono del producto.
-        var hue = validNames[n];
-        if (Number.isFinite(hue)) {
-          mini.style.background = 'linear-gradient(160deg, hsl(' + hue + ', 35%, 70%) 0%, hsl(' + hue + ', 28%, 45%) 100%)';
+
+        // Buscar el producto en DATA para obtener la imagen y el hue
+        var product = DATA.find(function (p) { return p.n === n; });
+        if (product) {
+          if (product.img) {
+            var img = document.createElement('img');
+            img.src = product.img;
+            img.alt = '';
+            img.onerror = function () { this.style.display = 'none'; };
+            mini.appendChild(img);
+          } else {
+            var hue = product.h;
+            mini.style.background = 'linear-gradient(160deg, hsl(' + hue + ', 35%, 70%) 0%, hsl(' + hue + ', 28%, 45%) 100%)';
+          }
         }
+
         left.appendChild(mini);
         left.appendChild(el('span', '', n));
         r.appendChild(left);
