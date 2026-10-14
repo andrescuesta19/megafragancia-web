@@ -1,0 +1,77 @@
+{
+  "promo": {
+    "activo": true,
+    "titulo": "2× $300.000",
+    "subtitulo": "Combo de octubre",
+    "vigencia": "Cantidad limitada",
+    "precio": 300000
+  },
+  "site": {
+    "hero_h1": "Perfumes árabes<br>y de nicho · <em>100% originales</em>",
+    "hero_lead": "Elige tus fragancias, arma tu combo y paga solo cuando lo recibes. Trabajamos directamente con proveedores autorizados y entregamos factura de cada pedido.",
+    "nosotros_texto": "Mega Fragancia es un emprendimiento colombiano dedicado a la curaduría de perfumes árabes y de nicho. Seleccionamos cada fragancia con proveedores autorizados y la probamos antes de ofrecerla, porque sabemos que un buen perfume es una decisión personal.\n\nEstamos en Turbo, Antioquia y enviamos a todo el país. Si quieres conocer la procedencia exacta de cualquier producto, te la mostramos: factura, lote y video del empaque.",
+    "instagram": "https://www.instagram.com/mega.fragancia7/"
+  },
+  "productos": [
+    {
+      "n": "Ámbar Real",
+      "t": "Unisex",
+      "h": 38,
+      "img": "assets/img/productos/ambar-real.jpg",
+      "desc": "Cálido, especiado y envolvente. Ideal para noches frescas.",
+      "a": ["Cardamomo", "Bergamota"],
+      "b": ["Ámbar", "Rosa"],
+      "c": ["Vainilla", "Pachulí"]
+    },
+    {
+      "n": "Oud Nocturno",
+      "t": "Hombre",
+      "h": 260,
+      "img": "assets/img/productos/oud-nocturno.jpg",
+      "desc": "Profundo, ahumado y elegante. Un clásico de la perfumería árabe.",
+      "a": ["Azafrán", "Pimienta"],
+      "b": ["Oud", "Cuero"],
+      "c": ["Sándalo", "Almizcle"]
+    },
+    {
+      "n": "Rosa del Desierto",
+      "t": "Mujer",
+      "h": 340,
+      "img": "assets/img/productos/rosa-del-desierto.jpg",
+      "desc": "Floral, dulce y sofisticado. Para quien deja huella.",
+      "a": ["Frambuesa", "Litchi"],
+      "b": ["Rosa damascena", "Peonía"],
+      "c": ["Almizcle", "Ámbar"]
+    },
+    {
+      "n": "Noche de Dátil",
+      "t": "Unisex",
+      "h": 28,
+      "img": "assets/img/productos/noche-de-dtil.jpg",
+      "desc": "Gourmand, oriental y memorable. Perfecto para regalar.",
+      "a": ["Dátil", "Canela"],
+      "b": ["Haba tonka", "Café"],
+      "c": ["Vainilla", "Madera"]
+    },
+    {
+      "n": "Atlas Fresco",
+      "t": "Hombre",
+      "h": 200,
+      "img": "assets/img/productos/atlas-fresco.jpg",
+      "desc": "Aromático, limpio y versátil. Para el día a día.",
+      "a": ["Limón", "Menta"],
+      "b": ["Lavanda", "Salvia"],
+      "c": ["Vetiver", "Cedro"]
+    },
+    {
+      "n": "Jazmín Dorado",
+      "t": "Mujer",
+      "h": 48,
+      "img": "assets/img/productos/jazmin-dorado.jpg",
+      "desc": "Floral blanco, solar y sofisticado. Elegancia en cada nota.",
+      "a": ["Mandarina", "Pera"],
+      "b": ["Jazmín", "Azahar"],
+      "c": ["Sándalo", "Vainilla"]
+    }
+  ]
+}

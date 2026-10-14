@@ -354,6 +354,14 @@
           <button class="admin-tab" data-tab="sitio" aria-pressed="false" type="button">Textos</button>
         </div>
 
+        <div style="background: var(--gold-bg); border: 1px solid var(--line-2); border-radius: 10px; padding: 12px 14px; margin-bottom: 18px; font: 500 .85rem var(--sans); color: var(--text);">
+          <strong style="color: var(--gold);">📦 Importante:</strong> Cada vez que guardes, se descarga un archivo <code style="background: var(--surface); padding: 2px 6px; border-radius: 4px;">data.json</code>. <strong>Súbelo a GitHub</strong> (arrástralo a la carpeta del repo) para que el cambio se vea en todos los dispositivos.
+          <div class="admin-actions" style="margin-top: 10px;">
+            <button class="btn ghost small" id="admin-reload" type="button">🔄 Recargar desde data.json</button>
+            <span class="save-feedback" id="reload-feedback">✓ Recargado</span>
+          </div>
+        </div>
+
         <!-- Tab Promo -->
         <div class="admin-tab-panel on" data-panel="promo">
           <p class="nsub">Edita la promoción del mes.</p>

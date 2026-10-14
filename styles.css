@@ -490,6 +490,22 @@ h3 {
   gap: 22px;
 }
 
+@media (max-width: 480px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .card .body { padding: 12px 12px 14px; }
+  .card h3 { font-size: 1rem; }
+  .card .desc { font-size: .78rem; min-height: 32px; }
+  .card .price { font-size: .92rem; margin: 4px 0 8px; }
+  .card .price small { font-size: .7rem; }
+  .card button { padding: 8px 6px; font-size: .7rem; }
+  .bottle-wrap { height: 180px; }
+  .bottle-wrap img { max-height: 150px; }
+  .tag { font-size: .62rem; padding: 3px 7px; }
+}
+
 .card {
   border: 1px solid var(--line);
   background: linear-gradient(180deg, var(--surface) 0%, var(--bg-2) 100%);

@@ -14,16 +14,9 @@
   // ---------- Configuración ----------
   var WHATSAPP = '573106399810';
   var COMBO_PRECIO_DEFAULT = 300000;
+  var DATA_URL = 'data.json';
 
-  // Producto placeholder mientras el cliente no suba los reales
-  var PRODUCTO_PLACEHOLDER = {
-    n: '', t: 'Unisex', h: 38,
-    desc: '',
-    a: [], b: [], c: [],
-    img: ''
-  };
-
-  // ---------- Estado persistido ----------
+  // ---------- Helpers de almacenamiento local ----------
   function loadJSON(key, fallback) {
     try {
       var raw = localStorage.getItem(key);
@@ -36,7 +29,7 @@
     try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
   }
 
-  // Promo
+  // ---------- Defaults (usados como fallback si falla la carga de data.json) ----------
   var PROMO_DEFAULT = {
     activo: true,
     titulo: '2× $300.000',
@@ -44,49 +37,25 @@
     vigencia: 'Cantidad limitada',
     precio: 300000
   };
-  var promo = (function () {
-    var p = loadJSON('mf_promo', null);
-    if (!p) return Object.assign({}, PROMO_DEFAULT);
-    return {
-      activo: Boolean(p.activo),
-      titulo: typeof p.titulo === 'string' ? p.titulo.slice(0, 40) : PROMO_DEFAULT.titulo,
-      subtitulo: typeof p.subtitulo === 'string' ? p.subtitulo.slice(0, 60) : PROMO_DEFAULT.subtitulo,
-      vigencia: typeof p.vigencia === 'string' ? p.vigencia.slice(0, 60) : PROMO_DEFAULT.vigencia,
-      precio: Number.isFinite(Number(p.precio)) && Number(p.precio) > 0 ? Number(p.precio) : PROMO_DEFAULT.precio
-    };
-  })();
-  function savePromo() { saveJSON('mf_promo', promo); }
-
-  // Textos del sitio
   var SITE_DEFAULT = {
     hero_h1: 'Perfumes árabes<br>y de nicho · <em>100% originales</em>',
     hero_lead: 'Elige tus fragancias, arma tu combo y paga solo cuando lo recibes. Trabajamos directamente con proveedores autorizados y entregamos factura de cada pedido.',
     nosotros_texto: 'Mega Fragancia es un emprendimiento colombiano dedicado a la curaduría de perfumes árabes y de nicho. Seleccionamos cada fragancia con proveedores autorizados y la probamos antes de ofrecerla, porque sabemos que un buen perfume es una decisión personal.\n\nEstamos en Turbo, Antioquia y enviamos a todo el país. Si quieres conocer la procedencia exacta de cualquier producto, te la mostramos: factura, lote y video del empaque.',
     instagram: 'https://www.instagram.com/mega.fragancia7/'
   };
-  var site = (function () {
-    var s = loadJSON('mf_site', null);
-    return s ? Object.assign({}, SITE_DEFAULT, s) : Object.assign({}, SITE_DEFAULT);
-  })();
-  function saveSite() { saveJSON('mf_site', site); }
-
-  // Productos (combinando defaults con lo que el cliente haya agregado/editado)
   var PRODUCTOS_DEFAULT = [
-    { n: 'Ámbar Real', t: 'Unisex', h: 38, desc: 'Cálido, especiado y envolvente. Ideal para noches frescas.', a: ['Cardamomo', 'Bergamota'], b: ['Ámbar', 'Rosa'], c: ['Vainilla', 'Pachulí'], img: '' },
-    { n: 'Oud Nocturno', t: 'Hombre', h: 260, desc: 'Profundo, ahumado y elegante. Un clásico de la perfumería árabe.', a: ['Azafrán', 'Pimienta'], b: ['Oud', 'Cuero'], c: ['Sándalo', 'Almizcle'], img: '' },
-    { n: 'Rosa del Desierto', t: 'Mujer', h: 340, desc: 'Floral, dulce y sofisticado. Para quien deja huella.', a: ['Frambuesa', 'Litchi'], b: ['Rosa damascena', 'Peonía'], c: ['Almizcle', 'Ámbar'], img: '' },
-    { n: 'Noche de Dátil', t: 'Unisex', h: 28, desc: 'Gourmand, oriental y memorable. Perfecto para regalar.', a: ['Dátil', 'Canela'], b: ['Haba tonka', 'Café'], c: ['Vainilla', 'Madera'], img: '' },
-    { n: 'Atlas Fresco', t: 'Hombre', h: 200, desc: 'Aromático, limpio y versátil. Para el día a día.', a: ['Limón', 'Menta'], b: ['Lavanda', 'Salvia'], c: ['Vetiver', 'Cedro'], img: '' },
-    { n: 'Jazmín Dorado', t: 'Mujer', h: 48, desc: 'Floral blanco, solar y sofisticado. Elegancia en cada nota.', a: ['Mandarina', 'Pera'], b: ['Jazmín', 'Azahar'], c: ['Sándalo', 'Vainilla'], img: '' }
+    { n: 'Ámbar Real', t: 'Unisex', h: 38, img: '', desc: 'Cálido, especiado y envolvente. Ideal para noches frescas.', a: ['Cardamomo', 'Bergamota'], b: ['Ámbar', 'Rosa'], c: ['Vainilla', 'Pachulí'] },
+    { n: 'Oud Nocturno', t: 'Hombre', h: 260, img: '', desc: 'Profundo, ahumado y elegante. Un clásico de la perfumería árabe.', a: ['Azafrán', 'Pimienta'], b: ['Oud', 'Cuero'], c: ['Sándalo', 'Almizcle'] },
+    { n: 'Rosa del Desierto', t: 'Mujer', h: 340, img: '', desc: 'Floral, dulce y sofisticado. Para quien deja huella.', a: ['Frambuesa', 'Litchi'], b: ['Rosa damascena', 'Peonía'], c: ['Almizcle', 'Ámbar'] },
+    { n: 'Noche de Dátil', t: 'Unisex', h: 28, img: '', desc: 'Gourmand, oriental y memorable. Perfecto para regalar.', a: ['Dátil', 'Canela'], b: ['Haba tonka', 'Café'], c: ['Vainilla', 'Madera'] },
+    { n: 'Atlas Fresco', t: 'Hombre', h: 200, img: '', desc: 'Aromático, limpio y versátil. Para el día a día.', a: ['Limón', 'Menta'], b: ['Lavanda', 'Salvia'], c: ['Vetiver', 'Cedro'] },
+    { n: 'Jazmín Dorado', t: 'Mujer', h: 48, img: '', desc: 'Floral blanco, solar y sofisticado. Elegancia en cada nota.', a: ['Mandarina', 'Pera'], b: ['Jazmín', 'Azahar'], c: ['Sándalo', 'Vainilla'] }
   ];
-  var DATA = (function () {
-    var saved = loadJSON('mf_products', null);
-    if (Array.isArray(saved) && saved.length) {
-      return saved.map(function (p) { return sanitizeProduct(p); });
-    }
-    return PRODUCTOS_DEFAULT.slice();
-  })();
-  function saveProducts() { saveJSON('mf_products', DATA); }
+
+  // ---------- Estado cargado de data.json ----------
+  var promo = Object.assign({}, PROMO_DEFAULT);
+  var site = Object.assign({}, SITE_DEFAULT);
+  var DATA = PRODUCTOS_DEFAULT.slice();
 
   function sanitizeProduct(p) {
     if (!p || typeof p !== 'object') return null;
@@ -104,7 +73,42 @@
     };
   }
 
-  // Carrito
+  function applyRemoteData(d) {
+    if (!d || typeof d !== 'object') return;
+    if (d.promo && typeof d.promo === 'object') {
+      promo = {
+        activo: Boolean(d.promo.activo),
+        titulo: typeof d.promo.titulo === 'string' ? d.promo.titulo.slice(0, 40) : PROMO_DEFAULT.titulo,
+        subtitulo: typeof d.promo.subtitulo === 'string' ? d.promo.subtitulo.slice(0, 60) : PROMO_DEFAULT.subtitulo,
+        vigencia: typeof d.promo.vigencia === 'string' ? d.promo.vigencia.slice(0, 60) : PROMO_DEFAULT.vigencia,
+        precio: Number.isFinite(Number(d.promo.precio)) && Number(d.promo.precio) > 0 ? Number(d.promo.precio) : PROMO_DEFAULT.precio
+      };
+    }
+    if (d.site && typeof d.site === 'object') {
+      site = Object.assign({}, SITE_DEFAULT, d.site);
+    }
+    if (Array.isArray(d.productos) && d.productos.length) {
+      var arr = [];
+      d.productos.forEach(function (p) {
+        var s = sanitizeProduct(p);
+        if (s) arr.push(s);
+      });
+      if (arr.length) DATA = arr;
+    }
+  }
+
+  // Carga data.json al iniciar. Si falla, usa defaults.
+  function loadRemote() {
+    return fetch(DATA_URL + '?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) { applyRemoteData(d); return true; })
+      .catch(function (e) {
+        console.warn('No se pudo cargar data.json, usando defaults:', e.message);
+        return false;
+      });
+  }
+
+  // Carrito (sigue siendo local — el carrito de un visitante no debe compartirse entre dispositivos)
   var cart = (function () {
     var c = loadJSON('mf_cart', {});
     if (!c || typeof c !== 'object') return {};
@@ -123,8 +127,8 @@
   var active = 'Todos';
   var search = '';
   var COMBO_PRECIO = promo.precio || COMBO_PRECIO_DEFAULT;
-  var editingProduct = null; // cuando edita un producto
-  var productToOpen = null; // cuando abre el detalle
+  var editingProduct = null;
+  var productToOpen = null;
 
   // ---------- Helpers ----------
   function $(id) { return document.getElementById(id); }
@@ -219,14 +223,25 @@
   }
 
   // ---------- Render textos del sitio ----------
+  // Helper: convierte un string con HTML simple (<br>, <em>, <strong>) a HTML seguro.
+  function safeHTML(s) {
+    if (!s) return '';
+    // Escapamos TODO primero
+    var esc = String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // Permitimos solo <br>, <br/>, <em>, </em>, <strong>, </strong>
+    return esc
+      .replace(/&lt;br\s*\/?&gt;/gi, '<br>')
+      .replace(/&lt;em&gt;/gi, '<em>').replace(/&lt;\/em&gt;/gi, '</em>')
+      .replace(/&lt;strong&gt;/gi, '<strong>').replace(/&lt;\/strong&gt;/gi, '</strong>');
+  }
+
   function renderSite() {
     var h1 = document.querySelector('.hero-text h1');
-    if (h1 && site.hero_h1) h1.innerHTML = sanitizeLine(site.hero_h1, 200).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    if (h1 && site.hero_h1) h1.innerHTML = safeHTML(site.hero_h1);
     var lead = document.querySelector('.hero-text .lead');
     if (lead && site.hero_lead) lead.textContent = sanitizeLine(site.hero_lead, 500);
     var nosText = document.querySelector('.nos-text');
     if (nosText && site.nosotros_texto) {
-      // Reemplaza los <p> del texto por el contenido guardado
       var existingPs = nosText.querySelectorAll('p:not(.eyebrow):not(.nos-dev)');
       var newP = document.createElement('p');
       newP.textContent = sanitizeLine(site.nosotros_texto, 1000);
@@ -633,22 +648,22 @@
         vigencia: sanitizeLine($('apromo-vigencia').value, 60) || PROMO_DEFAULT.vigencia,
         precio: (function () { var n = Number($('apromo-precio').value); return Number.isFinite(n) && n > 0 ? n : PROMO_DEFAULT.precio; })()
       };
-      savePromo();
       renderPromo();
       renderGrid();
       renderCart();
-      showFeedback('apromo-feedback');
+      var json = downloadDataJSON();
+      showExportFeedback('apromo-feedback', '✓ Guardado · data.json descargado · súbelo a GitHub');
     });
 
     $('apromo-reset').addEventListener('click', function () {
       if (confirm('¿Restablecer la promoción a los valores por defecto?')) {
         promo = Object.assign({}, PROMO_DEFAULT);
-        savePromo();
         renderPromo();
         renderGrid();
         renderCart();
         fillPromoForm();
-        showFeedback('apromo-feedback');
+        downloadDataJSON();
+        showExportFeedback('apromo-feedback', '✓ Restablecido · data.json descargado');
       }
     });
 
@@ -661,8 +676,8 @@
       npFile.addEventListener('change', function (e) {
         var file = e.target.files[0];
         if (!file) return;
-        if (file.size > 2 * 1024 * 1024) {
-          alert('La imagen es demasiado grande. Máximo 2MB.');
+        if (file.size > 500 * 1024) {
+          alert('La imagen es demasiado grande. Máximo 500KB para que data.json no pese mucho. Comprime la imagen o usa una más pequeña.');
           return;
         }
         var reader = new FileReader();
@@ -691,7 +706,6 @@
         img: npImageData
       };
       DATA.push(newP);
-      saveProducts();
       renderGrid();
       renderProductsList();
       // Reset form
@@ -702,8 +716,13 @@
       $('np-fondo').value = '';
       npImageData = '';
       npPreview.textContent = 'Sin imagen';
-      showFeedback('np-feedback');
+      downloadDataJSON();
+      showExportFeedback('np-feedback', '✓ Producto agregado · data.json descargado · súbelo a GitHub');
     });
+
+    // Productos — eliminar
+    // (override del handler que ya existía para que también descargue data.json)
+    // Se hace en renderProductsList más abajo
 
     // Textos
     $('as-save').addEventListener('click', function () {
@@ -711,10 +730,28 @@
       site.hero_lead = sanitizeLine($('as-hero-lead').value, 500);
       site.nosotros_texto = sanitizeLine($('as-nos-texto').value, 1000);
       site.instagram = sanitizeLine($('as-ig').value, 200);
-      saveSite();
       renderSite();
-      showFeedback('as-feedback');
+      downloadDataJSON();
+      showExportFeedback('as-feedback', '✓ Guardado · data.json descargado · súbelo a GitHub');
     });
+
+    // Recargar desde servidor (útil después de subir el data.json a GitHub)
+    var reloadBtn = $('admin-reload');
+    if (reloadBtn) {
+      reloadBtn.addEventListener('click', function () {
+        loadRemote().then(function (ok) {
+          renderPromo();
+          renderSite();
+          renderFilters();
+          renderGrid();
+          renderCart();
+          renderProductsList();
+          fillPromoForm();
+          fillSiteForm();
+          showExportFeedback('reload-feedback', ok ? '✓ Recargado desde data.json' : '⚠ No se pudo recargar (usando cache)');
+        });
+      });
+    }
   }
 
   function showAdminLogin() {
@@ -769,20 +806,29 @@
       var del = el('button', 'danger', 'Eliminar');
       del.type = 'button';
       del.addEventListener('click', function () {
-        if (confirm('¿Eliminar "' + p.n + '"? Esta acción no se puede deshacer.')) {
+        if (confirm('¿Eliminar "' + p.n + '"? Se descargará data.json actualizado.')) {
           DATA.splice(idx, 1);
-          saveProducts();
           delete cart[p.n];
           saveCart();
           renderGrid();
           renderCart();
           renderProductsList();
+          downloadDataJSON();
+          showExportFeedback('np-feedback', '✓ Eliminado · data.json descargado · súbelo a GitHub');
         }
       });
       acts.appendChild(del);
       li.appendChild(acts);
       list.appendChild(li);
     });
+  }
+
+  function showExportFeedback(id, msg) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(function () { el.classList.remove('show'); }, 3000);
   }
 
   function showFeedback(id) {
@@ -795,10 +841,52 @@
   // ---------- Filtros ----------
   var FILTERS = ['Todos', 'Hombre', 'Mujer', 'Unisex'];
 
+  // ---------- Exportar data.json ----------
+  function buildDataJSON() {
+    return {
+      promo: {
+        activo: promo.activo,
+        titulo: promo.titulo,
+        subtitulo: promo.subtitulo,
+        vigencia: promo.vigencia,
+        precio: promo.precio
+      },
+      site: {
+        hero_h1: site.hero_h1,
+        hero_lead: site.hero_lead,
+        nosotros_texto: site.nosotros_texto,
+        instagram: site.instagram
+      },
+      productos: DATA.map(function (p) {
+        return {
+          n: p.n, t: p.t, h: p.h, img: p.img, desc: p.desc,
+          a: p.a, b: p.b, c: p.c
+        };
+      })
+    };
+  }
+
+  function downloadDataJSON() {
+    var data = buildDataJSON();
+    var json = JSON.stringify(data, null, 2);
+    var blob = new Blob([json], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'data.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    return json;
+  }
+
   // ---------- Inicialización ----------
-  renderPromo();
-  renderSite();
-  renderFilters();
-  renderGrid();
-  renderCart();
+  loadRemote().then(function () {
+    renderPromo();
+    renderSite();
+    renderFilters();
+    renderGrid();
+    renderCart();
+  });
 })();
