@@ -1,26 +1,42 @@
 /* ==========================================================
-   Mega Fragancia — Lógica de la app
-   - Carrito en memoria + localStorage (solo datos no sensibles)
-   - SVG construido con createElementNS (sin innerHTML)
-   - Validación de inputs (WhatsApp, productos, cantidades)
-   - Mensaje de WhatsApp sanitizado y con tope de longitud
+   Mega Fragancia — Lógica de la app v3
+   - Carrito con persistencia (localStorage)
+   - Buscador de productos
+   - Modal de detalle de producto
+   - Botón flotante de WhatsApp
+   - Panel admin completo: promo, productos (CRUD), textos
+   - SVG construido con createElementNS (sin innerHTML inseguro)
    ========================================================== */
 
 (function () {
   'use strict';
 
   // ---------- Configuración ----------
-  // Número de WhatsApp del negocio, solo dígitos, con código de país (57 = Colombia).
-  // Si se deja vacío, el botón se deshabilita automáticamente.
-  var WHATSAPP = '573106399810'; // ← Número de Mega Fragancia
+  var WHATSAPP = '573106399810';
+  var COMBO_PRECIO_DEFAULT = 300000;
 
-  // Precio del combo 2x1 en pesos colombianos.
-  var COMBO_PRECIO = 300000;
+  // Producto placeholder mientras el cliente no suba los reales
+  var PRODUCTO_PLACEHOLDER = {
+    n: '', t: 'Unisex', h: 38,
+    desc: '',
+    a: [], b: [], c: [],
+    img: ''
+  };
 
-  // ---------- Configuración de la promoción ----------
-  // El cliente puede editar el texto de la promo desde el panel admin (icono ⚙ en el header).
-  // Cambia estos valores por defecto si quieres arrancar con una promo distinta.
-  // Estructura: { activo: bool, titulo, subtitulo, precio, vigencia, precioAnterior? }
+  // ---------- Estado persistido ----------
+  function loadJSON(key, fallback) {
+    try {
+      var raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      var p = JSON.parse(raw);
+      return p == null ? fallback : p;
+    } catch (e) { return fallback; }
+  }
+  function saveJSON(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+  }
+
+  // Promo
   var PROMO_DEFAULT = {
     activo: true,
     titulo: '2× $300.000',
@@ -28,148 +44,87 @@
     vigencia: 'Cantidad limitada',
     precio: 300000
   };
+  var promo = (function () {
+    var p = loadJSON('mf_promo', null);
+    if (!p) return Object.assign({}, PROMO_DEFAULT);
+    return {
+      activo: Boolean(p.activo),
+      titulo: typeof p.titulo === 'string' ? p.titulo.slice(0, 40) : PROMO_DEFAULT.titulo,
+      subtitulo: typeof p.subtitulo === 'string' ? p.subtitulo.slice(0, 60) : PROMO_DEFAULT.subtitulo,
+      vigencia: typeof p.vigencia === 'string' ? p.vigencia.slice(0, 60) : PROMO_DEFAULT.vigencia,
+      precio: Number.isFinite(Number(p.precio)) && Number(p.precio) > 0 ? Number(p.precio) : PROMO_DEFAULT.precio
+    };
+  })();
+  function savePromo() { saveJSON('mf_promo', promo); }
 
-  // Catálogo editable. Reemplazar por productos reales con fotos en assets/img/productos/.
-  // Para cada producto:
-  //   n: nombre
-  //   t: tipo ('Hombre' | 'Mujer' | 'Unisex')
-  //   desc: descripción corta
-  //   a/b/c: notas de salida, corazón y fondo
-  //   img: ruta a la foto (opcional, ej: 'assets/img/productos/ambar-real.jpg')
-  //        Si no se especifica, se muestra un SVG placeholder con el color 'h' (HSL 0-360)
-  //   h: tono HSL para el SVG placeholder cuando no hay foto
-  var DATA = [
-    {
-      n: 'Ámbar Real',
-      t: 'Unisex',
-      h: 38,
-      img: 'assets/img/productos/ambar-real.jpg',
-      desc: 'Cálido, especiado y envolvente. Ideal para noches frescas.',
-      a: ['Cardamomo', 'Bergamota'],
-      b: ['Ámbar', 'Rosa'],
-      c: ['Vainilla', 'Pachulí']
-    },
-    {
-      n: 'Oud Nocturno',
-      t: 'Hombre',
-      h: 260,
-      img: 'assets/img/productos/oud-nocturno.jpg',
-      desc: 'Profundo, ahumado y elegante. Un clásico de la perfumería árabe.',
-      a: ['Azafrán', 'Pimienta'],
-      b: ['Oud', 'Cuero'],
-      c: ['Sándalo', 'Almizcle']
-    },
-    {
-      n: 'Rosa del Desierto',
-      t: 'Mujer',
-      h: 340,
-      img: 'assets/img/productos/rosa-del-desierto.jpg',
-      desc: 'Floral, dulce y sofisticado. Para quien deja huella.',
-      a: ['Frambuesa', 'Litchi'],
-      b: ['Rosa damascena', 'Peonía'],
-      c: ['Almizcle', 'Ámbar']
-    },
-    {
-      n: 'Noche de Dátil',
-      t: 'Unisex',
-      h: 28,
-      img: 'assets/img/productos/noche-de-dtil.jpg',
-      desc: 'Gourmand, oriental y memorable. Perfecto para regalar.',
-      a: ['Dátil', 'Canela'],
-      b: ['Haba tonka', 'Café'],
-      c: ['Vainilla', 'Madera']
-    },
-    {
-      n: 'Atlas Fresco',
-      t: 'Hombre',
-      h: 200,
-      img: 'assets/img/productos/atlas-fresco.jpg',
-      desc: 'Aromático, limpio y versátil. Para el día a día.',
-      a: ['Limón', 'Menta'],
-      b: ['Lavanda', 'Salvia'],
-      c: ['Vetiver', 'Cedro']
-    },
-    {
-      n: 'Jazmín Dorado',
-      t: 'Mujer',
-      h: 48,
-      img: 'assets/img/productos/jazmin-dorado.jpg',
-      desc: 'Floral blanco, solar y sofisticado. Elegancia en cada nota.',
-      a: ['Mandarina', 'Pera'],
-      b: ['Jazmín', 'Azahar'],
-      c: ['Sándalo', 'Vainilla']
-    }
+  // Textos del sitio
+  var SITE_DEFAULT = {
+    hero_h1: 'Perfumes árabes<br>y de nicho · <em>100% originales</em>',
+    hero_lead: 'Elige tus fragancias, arma tu combo y paga solo cuando lo recibes. Trabajamos directamente con proveedores autorizados y entregamos factura de cada pedido.',
+    nosotros_texto: 'Mega Fragancia es un emprendimiento colombiano dedicado a la curaduría de perfumes árabes y de nicho. Seleccionamos cada fragancia con proveedores autorizados y la probamos antes de ofrecerla, porque sabemos que un buen perfume es una decisión personal.\n\nEstamos en Turbo, Antioquia y enviamos a todo el país. Si quieres conocer la procedencia exacta de cualquier producto, te la mostramos: factura, lote y video del empaque.',
+    instagram: 'https://www.instagram.com/mega.fragancia7/'
+  };
+  var site = (function () {
+    var s = loadJSON('mf_site', null);
+    return s ? Object.assign({}, SITE_DEFAULT, s) : Object.assign({}, SITE_DEFAULT);
+  })();
+  function saveSite() { saveJSON('mf_site', site); }
+
+  // Productos (combinando defaults con lo que el cliente haya agregado/editado)
+  var PRODUCTOS_DEFAULT = [
+    { n: 'Ámbar Real', t: 'Unisex', h: 38, desc: 'Cálido, especiado y envolvente. Ideal para noches frescas.', a: ['Cardamomo', 'Bergamota'], b: ['Ámbar', 'Rosa'], c: ['Vainilla', 'Pachulí'], img: '' },
+    { n: 'Oud Nocturno', t: 'Hombre', h: 260, desc: 'Profundo, ahumado y elegante. Un clásico de la perfumería árabe.', a: ['Azafrán', 'Pimienta'], b: ['Oud', 'Cuero'], c: ['Sándalo', 'Almizcle'], img: '' },
+    { n: 'Rosa del Desierto', t: 'Mujer', h: 340, desc: 'Floral, dulce y sofisticado. Para quien deja huella.', a: ['Frambuesa', 'Litchi'], b: ['Rosa damascena', 'Peonía'], c: ['Almizcle', 'Ámbar'], img: '' },
+    { n: 'Noche de Dátil', t: 'Unisex', h: 28, desc: 'Gourmand, oriental y memorable. Perfecto para regalar.', a: ['Dátil', 'Canela'], b: ['Haba tonka', 'Café'], c: ['Vainilla', 'Madera'], img: '' },
+    { n: 'Atlas Fresco', t: 'Hombre', h: 200, desc: 'Aromático, limpio y versátil. Para el día a día.', a: ['Limón', 'Menta'], b: ['Lavanda', 'Salvia'], c: ['Vetiver', 'Cedro'], img: '' },
+    { n: 'Jazmín Dorado', t: 'Mujer', h: 48, desc: 'Floral blanco, solar y sofisticado. Elegancia en cada nota.', a: ['Mandarina', 'Pera'], b: ['Jazmín', 'Azahar'], c: ['Sándalo', 'Vainilla'], img: '' }
   ];
+  var DATA = (function () {
+    var saved = loadJSON('mf_products', null);
+    if (Array.isArray(saved) && saved.length) {
+      return saved.map(function (p) { return sanitizeProduct(p); });
+    }
+    return PRODUCTOS_DEFAULT.slice();
+  })();
+  function saveProducts() { saveJSON('mf_products', DATA); }
 
-  // Filtros disponibles.
-  var FILTERS = ['Todos', 'Hombre', 'Mujer', 'Unisex'];
+  function sanitizeProduct(p) {
+    if (!p || typeof p !== 'object') return null;
+    var n = typeof p.n === 'string' ? p.n.slice(0, 60).trim() : '';
+    if (!n) return null;
+    return {
+      n: n,
+      t: ['Hombre', 'Mujer', 'Unisex'].indexOf(p.t) >= 0 ? p.t : 'Unisex',
+      h: Number.isFinite(Number(p.h)) ? Math.max(0, Math.min(360, Number(p.h))) : 38,
+      desc: typeof p.desc === 'string' ? p.desc.slice(0, 200) : '',
+      a: Array.isArray(p.a) ? p.a.slice(0, 6).map(String) : [],
+      b: Array.isArray(p.b) ? p.b.slice(0, 6).map(String) : [],
+      c: Array.isArray(p.c) ? p.c.slice(0, 6).map(String) : [],
+      img: typeof p.img === 'string' ? p.img.slice(0, 500) : ''
+    };
+  }
+
+  // Carrito
+  var cart = (function () {
+    var c = loadJSON('mf_cart', {});
+    if (!c || typeof c !== 'object') return {};
+    var out = {};
+    Object.keys(c).forEach(function (k) {
+      var v = Number(c[k]);
+      if (Number.isInteger(v) && v > 0 && v <= 20 && typeof k === 'string' && k.length < 80) {
+        out[k] = v;
+      }
+    });
+    return out;
+  })();
+  function saveCart() { saveJSON('mf_cart', cart); }
+
+  // ---------- Estado UI ----------
   var active = 'Todos';
-
-  // Carrito: { 'nombreProducto': cantidad, ... }
-  // Se persiste solo el nombre y la cantidad, no datos personales.
-  var cart = loadCart();
-  var notesTarget = null; // producto abierto en el modal de notas
-
-  // Carga la promo guardada por el cliente en el panel admin, o usa el default.
-  var promo = loadPromo();
-
-  function loadPromo() {
-    try {
-      var raw = localStorage.getItem('mf_promo');
-      if (!raw) return Object.assign({}, PROMO_DEFAULT);
-      var p = JSON.parse(raw);
-      // Validación: solo aceptamos strings cortos y números razonables
-      if (p && typeof p === 'object') {
-        return {
-          activo: Boolean(p.activo),
-          titulo: typeof p.titulo === 'string' ? p.titulo.slice(0, 40) : PROMO_DEFAULT.titulo,
-          subtitulo: typeof p.subtitulo === 'string' ? p.subtitulo.slice(0, 60) : PROMO_DEFAULT.subtitulo,
-          vigencia: typeof p.vigencia === 'string' ? p.vigencia.slice(0, 60) : PROMO_DEFAULT.vigencia,
-          precio: Number.isFinite(Number(p.precio)) && Number(p.precio) > 0 && Number(p.precio) < 100000000
-            ? Number(p.precio) : PROMO_DEFAULT.precio
-        };
-      }
-    } catch (e) { /* ignore */ }
-    return Object.assign({}, PROMO_DEFAULT);
-  }
-
-  function savePromo() {
-    try { localStorage.setItem('mf_promo', JSON.stringify(promo)); } catch (e) { /* ignore */ }
-  }
-
-  function renderPromo() {
-    var elTitulo = document.getElementById('promo-titulo');
-    var elSub = document.getElementById('promo-subtitulo');
-    var elVig = document.getElementById('promo-vigencia');
-    var elEyebrow = document.getElementById('promo-eyebrow');
-    if (!elTitulo) return;
-    if (promo.activo) {
-      elTitulo.textContent = promo.titulo;
-      // Subtitulo: lo pintamos con textContent (seguro contra XSS) y
-      // creamos un <br> solo si hay saltos de línea.
-      if (elSub) {
-        elSub.textContent = '';
-        var parts = sanitizeLine(promo.subtitulo, 60).split('\n');
-        parts.forEach(function (p, i) {
-          elSub.appendChild(document.createTextNode(p));
-          if (i < parts.length - 1) elSub.appendChild(document.createElement('br'));
-        });
-      }
-      if (elVig) elVig.textContent = promo.vigencia;
-      if (elEyebrow) {
-        var lastWord = sanitizeLine(promo.subtitulo, 60).split(' ').pop() || 'octubre';
-        elEyebrow.textContent = 'Colección de ' + lastWord;
-      }
-    } else {
-      // Promo desactivada: ocultar bloque
-      var block = document.getElementById('promo-block');
-      if (block) block.style.display = 'none';
-    }
-    // Actualizar precio del combo en toda la app
-    if (Number.isFinite(promo.precio) && promo.precio > 0) {
-      COMBO_PRECIO = promo.precio;
-    }
-  }
+  var search = '';
+  var COMBO_PRECIO = promo.precio || COMBO_PRECIO_DEFAULT;
+  var editingProduct = null; // cuando edita un producto
+  var productToOpen = null; // cuando abre el detalle
 
   // ---------- Helpers ----------
   function $(id) { return document.getElementById(id); }
@@ -180,118 +135,107 @@
     return e;
   }
   function fmt(n) { return '$' + Number(n).toLocaleString('es-CO'); }
-
-  // Sanitiza una cadena para usarla como texto dentro de un mensaje de WhatsApp.
-  // Quita caracteres de control y limita longitud por línea.
   function sanitizeLine(s, max) {
-    var cleaned = String(s == null ? '' : s)
-      .replace(/[\u0000-\u001F\u007F]/g, '') // quita control chars
-      .replace(/[ \t]+/g, ' ')               // colapsa espacios
-      .trim();
+    var cleaned = String(s == null ? '' : s).replace(/[\u0000-\u001F\u007F]/g, '').replace(/[ \t]+/g, ' ').trim();
     if (max && cleaned.length > max) cleaned = cleaned.slice(0, max);
     return cleaned;
   }
+  function isValidWhatsApp(num) { return /^\d{10,15}$/.test(num); }
 
-  // Construye un SVG de frasco de forma SEGURA usando createElementNS.
-  // Nunca concatena strings en innerHTML, por lo que es inmune a XSS vía
-  // parámetros dinámicos si en el futuro DATA viene de una fuente externa.
+  // SVG seguro de frasco
   function buildBottleSVG(hue) {
-    // Validamos que hue sea un entero entre 0 y 360. Si no, usamos 38.
     var h = Math.floor(Number(hue));
     if (!Number.isFinite(h) || h < 0 || h > 360) h = 38;
-
     var NS = 'http://www.w3.org/2000/svg';
     var svg = document.createElementNS(NS, 'svg');
     svg.setAttribute('viewBox', '0 0 120 180');
-    svg.setAttribute('width', '120');
-    svg.setAttribute('height', '180');
+    svg.setAttribute('width', '120'); svg.setAttribute('height', '180');
     svg.setAttribute('aria-hidden', 'true');
-
     var defs = document.createElementNS(NS, 'defs');
     var grad = document.createElementNS(NS, 'linearGradient');
     var gradId = 'g' + h + '-' + Math.random().toString(36).slice(2, 8);
     grad.setAttribute('id', gradId);
     grad.setAttribute('x1', '0'); grad.setAttribute('y1', '0');
     grad.setAttribute('x2', '1'); grad.setAttribute('y2', '1');
-
     var stop1 = document.createElementNS(NS, 'stop');
-    stop1.setAttribute('offset', '0');
-    stop1.setAttribute('stop-color', 'hsl(' + h + ', 35%, 60%)');
+    stop1.setAttribute('offset', '0'); stop1.setAttribute('stop-color', 'hsl(' + h + ', 35%, 60%)');
     var stop2 = document.createElementNS(NS, 'stop');
-    stop2.setAttribute('offset', '1');
-    stop2.setAttribute('stop-color', 'hsl(' + h + ', 28%, 35%)');
-
-    grad.appendChild(stop1);
-    grad.appendChild(stop2);
-    defs.appendChild(grad);
-    svg.appendChild(defs);
-
-    // Tapa
+    stop2.setAttribute('offset', '1'); stop2.setAttribute('stop-color', 'hsl(' + h + ', 28%, 35%)');
+    grad.appendChild(stop1); grad.appendChild(stop2);
+    defs.appendChild(grad); svg.appendChild(defs);
     var cap = document.createElementNS(NS, 'rect');
     cap.setAttribute('x', '46'); cap.setAttribute('y', '6');
     cap.setAttribute('width', '28'); cap.setAttribute('height', '22');
-    cap.setAttribute('rx', '5');
-    cap.setAttribute('fill', '#3a2c1e');
+    cap.setAttribute('rx', '5'); cap.setAttribute('fill', '#3a2c1e');
     svg.appendChild(cap);
-
-    // Cuello
     var neck = document.createElementNS(NS, 'rect');
     neck.setAttribute('x', '52'); neck.setAttribute('y', '28');
     neck.setAttribute('width', '16'); neck.setAttribute('height', '14');
     neck.setAttribute('fill', '#7a5a3a');
     svg.appendChild(neck);
-
-    // Cuerpo
     var body = document.createElementNS(NS, 'rect');
     body.setAttribute('x', '18'); body.setAttribute('y', '42');
     body.setAttribute('width', '84'); body.setAttribute('height', '128');
-    body.setAttribute('rx', '18');
-    body.setAttribute('fill', 'url(#' + gradId + ')');
+    body.setAttribute('rx', '18'); body.setAttribute('fill', 'url(#' + gradId + ')');
     svg.appendChild(body);
-
-    // Brillo
     var shine = document.createElementNS(NS, 'rect');
     shine.setAttribute('x', '28'); shine.setAttribute('y', '56');
     shine.setAttribute('width', '12'); shine.setAttribute('height', '100');
-    shine.setAttribute('rx', '6');
-    shine.setAttribute('fill', '#fff');
+    shine.setAttribute('rx', '6'); shine.setAttribute('fill', '#fff');
     shine.setAttribute('opacity', '0.18');
     svg.appendChild(shine);
-
     return svg;
   }
 
-  // Valida que WHATSAPP tenga un formato razonable.
-  function isValidWhatsApp(num) {
-    return /^\d{10,15}$/.test(num);
-  }
-
-  // Carga carrito desde localStorage. Si está corrupto, devuelve {}.
-  function loadCart() {
-    try {
-      var raw = localStorage.getItem('mf_cart');
-      if (!raw) return {};
-      var parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        // Limpia entradas inválidas
-        var out = {};
-        Object.keys(parsed).forEach(function (k) {
-          var v = Number(parsed[k]);
-          if (Number.isInteger(v) && v > 0 && v <= 20 && typeof k === 'string' && k.length < 80) {
-            out[k] = v;
-          }
+  // ---------- Render promo ----------
+  function renderPromo() {
+    var elTitulo = $('promo-titulo');
+    if (!elTitulo) return;
+    if (promo.activo) {
+      elTitulo.textContent = promo.titulo;
+      var elSub = $('promo-subtitulo');
+      if (elSub) {
+        elSub.textContent = '';
+        var parts = sanitizeLine(promo.subtitulo, 60).split('\n');
+        parts.forEach(function (p, i) {
+          elSub.appendChild(document.createTextNode(p));
+          if (i < parts.length - 1) elSub.appendChild(document.createElement('br'));
         });
-        return out;
       }
-    } catch (e) { /* ignore */ }
-    return {};
+      var elVig = $('promo-vigencia');
+      if (elVig) elVig.textContent = promo.vigencia;
+      var elEyebrow = $('promo-eyebrow');
+      if (elEyebrow) {
+        var lastWord = sanitizeLine(promo.subtitulo, 60).split(' ').pop() || 'octubre';
+        elEyebrow.textContent = 'Colección de ' + lastWord + ' · Envíos a toda Colombia';
+      }
+    } else {
+      var block = $('promo-block');
+      if (block) block.style.display = 'none';
+    }
+    if (Number.isFinite(promo.precio) && promo.precio > 0) {
+      COMBO_PRECIO = promo.precio;
+    }
   }
 
-  function saveCart() {
-    try { localStorage.setItem('mf_cart', JSON.stringify(cart)); } catch (e) { /* ignore */ }
+  // ---------- Render textos del sitio ----------
+  function renderSite() {
+    var h1 = document.querySelector('.hero-text h1');
+    if (h1 && site.hero_h1) h1.innerHTML = sanitizeLine(site.hero_h1, 200).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    var lead = document.querySelector('.hero-text .lead');
+    if (lead && site.hero_lead) lead.textContent = sanitizeLine(site.hero_lead, 500);
+    var nosText = document.querySelector('.nos-text');
+    if (nosText && site.nosotros_texto) {
+      // Reemplaza los <p> del texto por el contenido guardado
+      var existingPs = nosText.querySelectorAll('p:not(.eyebrow):not(.nos-dev)');
+      var newP = document.createElement('p');
+      newP.textContent = sanitizeLine(site.nosotros_texto, 1000);
+      if (existingPs[0]) existingPs[0].parentNode.replaceChild(newP, existingPs[0]);
+      if (existingPs[1]) existingPs[1].remove();
+    }
   }
 
-  // ---------- Render ----------
+  // ---------- Render catálogo ----------
   function renderFilters() {
     var fbox = $('filters');
     fbox.textContent = '';
@@ -314,15 +258,22 @@
     var empty = $('empty');
     grid.textContent = '';
 
-    var visible = DATA.filter(function (p) { return active === 'Todos' || p.t === active; });
+    var q = sanitizeLine(search, 40).toLowerCase();
+    var visible = DATA.filter(function (p) {
+      if (active !== 'Todos' && p.t !== active) return false;
+      if (q && p.n.toLowerCase().indexOf(q) === -1) return false;
+      return true;
+    });
+
     if (!visible.length) { empty.hidden = false; return; }
     empty.hidden = true;
 
-    visible.forEach(function (p) {
+    visible.forEach(function (p, idx) {
       var card = el('article', 'card reveal in');
       card.setAttribute('aria-label', p.n + ', ' + p.t);
+      card.dataset.idx = String(DATA.indexOf(p));
 
-      // Imagen / frasco
+      // Imagen
       var wrap = el('div', 'bottle-wrap');
       var tagRow = el('div', 'tag-row');
       var tagCat = el('span', 'tag cat-' + p.t.toLowerCase(), p.t);
@@ -331,16 +282,12 @@
       tagRow.appendChild(tagCom);
       wrap.appendChild(tagRow);
 
-      // Si tiene imagen, mostrarla. Si no, fallback al SVG placeholder.
       if (p.img) {
         var img = document.createElement('img');
         img.src = p.img;
         img.alt = p.n;
         img.loading = 'lazy';
-        img.onerror = function () {
-          // Si la imagen no existe, mostrar SVG placeholder
-          this.parentNode.replaceChild(buildBottleSVG(p.h), this);
-        };
+        img.onerror = function () { this.parentNode.replaceChild(buildBottleSVG(p.h), this); };
         wrap.appendChild(img);
       } else {
         wrap.appendChild(buildBottleSVG(p.h));
@@ -350,48 +297,46 @@
       // Body
       var body = el('div', 'body');
       body.appendChild(el('h3', '', p.n));
-      body.appendChild(el('p', 'desc', p.desc));
+      body.appendChild(el('p', 'desc', p.desc || 'Fragancia de la colección de la temporada.'));
       var price = el('div', 'price', fmt(Math.floor(COMBO_PRECIO / 2)) + ' c/u');
       var small = el('small', '', 'o 2× ' + fmt(COMBO_PRECIO) + ' en combo');
       price.appendChild(small);
       body.appendChild(price);
 
-      // Botones
       var row = el('div', 'row');
-      var nb = el('button', '', 'Notas');
-      nb.type = 'button';
-      nb.addEventListener('click', function () { openNotes(p); });
-
       var qty = cart[p.n] || 0;
       var pb = el('button', 'pick', qty ? ('En carrito (' + qty + ') +') : 'Añadir al carrito');
-      pb.type = 'button';
       if (qty) pb.classList.add('added');
+      pb.type = 'button';
       pb.setAttribute('aria-pressed', String(qty > 0));
-      pb.addEventListener('click', function () { change(p.n, 1); });
-
-      row.appendChild(nb);
+      pb.addEventListener('click', function (e) {
+        e.stopPropagation();
+        change(p.n, 1);
+      });
       row.appendChild(pb);
       body.appendChild(row);
       card.appendChild(body);
       grid.appendChild(card);
+
+      // Click en la card abre detalle (excepto botones)
+      card.addEventListener('click', function (e) {
+        if (e.target.closest('button')) return;
+        openProductDetail(p);
+      });
     });
   }
 
+  // ---------- Carrito ----------
   function change(name, d) {
     var safe = sanitizeLine(name, 80);
     var q = (cart[safe] || 0) + d;
-    if (q <= 0) { delete cart[safe]; }
-    else { cart[safe] = Math.min(q, 20); }
+    if (q <= 0) delete cart[safe];
+    else cart[safe] = Math.min(q, 20);
     saveCart();
     renderGrid();
     renderCart();
   }
-
-  function units() {
-    var t = 0;
-    Object.keys(cart).forEach(function (k) { t += cart[k]; });
-    return t;
-  }
+  function units() { var t = 0; Object.keys(cart).forEach(function (k) { t += cart[k]; }); return t; }
 
   function renderCart() {
     var cc = $('cc');
@@ -404,9 +349,9 @@
     var oSub = $('obar-sub');
     var oBtn = $('obar-btn');
 
-    // Purga productos que ya no existen en el catálogo (huérfanos de localStorage).
+    // Purga huérfanos
     var validNames = {};
-    DATA.forEach(function (p) { validNames[p.n] = p.h; });
+    DATA.forEach(function (p) { validNames[p.n] = p; });
     var changed = false;
     Object.keys(cart).forEach(function (k) {
       if (!(k in validNames)) { delete cart[k]; changed = true; }
@@ -416,14 +361,12 @@
     var u = units();
     var combos = Math.floor(u / 2);
     var rem = u % 2;
-
     cc.textContent = u;
     oCount.textContent = u + (u === 1 ? ' fragancia' : ' fragancias');
     oSub.textContent = rem
       ? ('Te falta 1 para completar otro combo · ' + combos + (combos === 1 ? ' combo' : ' combos') + ' activo' + (combos === 1 ? '' : 's'))
       : (combos ? combos + (combos === 1 ? ' combo' : ' combos') + ' × ' + fmt(COMBO_PRECIO) + ' = ' + fmt(combos * COMBO_PRECIO) : 'Agrega 2 fragancias para activar el combo 2×' + fmt(COMBO_PRECIO));
 
-    // Lista
     clist.textContent = '';
     var names = Object.keys(cart);
     if (!names.length) {
@@ -433,9 +376,7 @@
         var r = el('div', 'crow');
         var left = el('div', 'name');
         var mini = el('div', 'mini');
-
-        // Buscar el producto en DATA para obtener la imagen y el hue
-        var product = DATA.find(function (p) { return p.n === n; });
+        var product = validNames[n];
         if (product) {
           if (product.img) {
             var img = document.createElement('img');
@@ -444,11 +385,9 @@
             img.onerror = function () { this.style.display = 'none'; };
             mini.appendChild(img);
           } else {
-            var hue = product.h;
-            mini.style.background = 'linear-gradient(160deg, hsl(' + hue + ', 35%, 70%) 0%, hsl(' + hue + ', 28%, 45%) 100%)';
+            mini.style.background = 'linear-gradient(160deg, hsl(' + product.h + ', 35%, 70%) 0%, hsl(' + product.h + ', 28%, 45%) 100%)';
           }
         }
-
         left.appendChild(mini);
         left.appendChild(el('span', '', n));
         r.appendChild(left);
@@ -469,82 +408,127 @@
       });
     }
 
-    csum.textContent = combos
-      ? (combos + (combos === 1 ? ' combo' : ' combos') + ' × ' + fmt(COMBO_PRECIO) + ' = ' + fmt(combos * COMBO_PRECIO))
-      : '';
-    chint.textContent = rem
-      ? 'Te falta 1 fragancia para completar otro combo. El precio de fragancia suelta lo confirma el negocio por WhatsApp.'
-      : '';
+    csum.textContent = combos ? (combos + (combos === 1 ? ' combo' : ' combos') + ' × ' + fmt(COMBO_PRECIO) + ' = ' + fmt(combos * COMBO_PRECIO)) : '';
+    chint.textContent = rem ? 'Te falta 1 fragancia para completar otro combo. El precio de fragancia suelta lo confirma el negocio por WhatsApp.' : '';
 
     // Link de WhatsApp
     if (isValidWhatsApp(WHATSAPP)) {
-      var lines = names.map(function (n) {
-        return '- ' + cart[n] + ' x ' + sanitizeLine(n, 60);
-      }).join('\n');
-      var msg =
-        'Hola, Mega Fragancia 👋\n' +
-        'Quiero hacer este pedido:\n' +
-        (lines || '(sin productos)') +
+      var lines = names.map(function (n) { return '- ' + cart[n] + ' x ' + sanitizeLine(n, 60); }).join('\n');
+      var msg = 'Hola, Mega Fragancia 👋\nQuiero hacer este pedido:\n' + (lines || '(sin productos)') +
         (combos ? '\n\nCombos 2×' + fmt(COMBO_PRECIO) + ': ' + combos : '') +
         '\n\n¿Confirman disponibilidad, envío y forma de pago?';
-
-      // Tope defensivo: 800 chars para evitar payloads gigantes.
       if (msg.length > 800) msg = msg.slice(0, 790) + '...';
-
       wa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent(msg);
       wa.removeAttribute('aria-disabled');
     } else {
       wa.removeAttribute('href');
       wa.setAttribute('aria-disabled', 'true');
     }
-
-    // Barra flotante
     oBtn.setAttribute('aria-disabled', u ? 'false' : 'true');
     if (u > 0) obar.classList.add('on'); else obar.classList.remove('on');
   }
 
-  // Bloquea el clic si el botón está deshabilitado.
+  // ---------- Modal de detalle de producto ----------
+  function openProductDetail(p) {
+    productToOpen = p;
+    var dp = $('dproduct');
+    if (!dp) return;
+    $('dp-title').textContent = p.n;
+
+    var content = $('dp-content');
+    content.textContent = '';
+
+    var imgWrap = el('div', 'pd-image');
+    if (p.img) {
+      var img = document.createElement('img');
+      img.src = p.img;
+      img.alt = p.n;
+      img.onerror = function () { this.parentNode.replaceChild(buildBottleSVG(p.h), this); };
+      imgWrap.appendChild(img);
+    } else {
+      imgWrap.appendChild(buildBottleSVG(p.h));
+    }
+    content.appendChild(imgWrap);
+
+    var info = el('div', 'pd-info');
+    var h4 = el('h4', '', p.t);
+    info.appendChild(h4);
+    var h2 = el('h2', '', p.n);
+    info.appendChild(h2);
+    var price = el('div', 'price', fmt(Math.floor(COMBO_PRECIO / 2)) + ' c/u');
+    var small = el('small', '', 'o 2× ' + fmt(COMBO_PRECIO) + ' en combo');
+    price.appendChild(small);
+    info.appendChild(price);
+    var desc = el('p', 'desc', p.desc || 'Fragancia de la colección de la temporada.');
+    info.appendChild(desc);
+    content.appendChild(info);
+
+    $('dp-n1').textContent = (p.a || []).join(', ') || '—';
+    $('dp-n2').textContent = (p.b || []).join(', ') || '—';
+    $('dp-n3').textContent = (p.c || []).join(', ') || '—';
+
+    var addBtn = $('dp-add');
+    addBtn.textContent = cart[p.n] ? 'Añadir otra unidad' : 'Añadir al carrito';
+
+    if (typeof dp.showModal === 'function') dp.showModal();
+  }
+
+  $('dp-add').addEventListener('click', function () {
+    if (productToOpen) change(productToOpen.n, 1);
+    var dp = $('dproduct');
+    if (dp && typeof dp.close === 'function') dp.close();
+  });
+
+  // ---------- Botón flotante de WhatsApp ----------
+  function renderWAFAB() {
+    var fab = $('wa-fab');
+    if (!fab) return;
+    if (isValidWhatsApp(WHATSAPP)) {
+      var msg = 'Hola, Mega Fragancia. Quiero información sobre sus perfumes.';
+      fab.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent(msg);
+      fab.removeAttribute('aria-disabled');
+    } else {
+      fab.removeAttribute('href');
+    }
+  }
+  renderWAFAB();
+
+  // ---------- Hero WhatsApp + nosotros WhatsApp ----------
+  var heroWa = $('hero-wa');
+  if (heroWa && isValidWhatsApp(WHATSAPP)) {
+    heroWa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, Mega Fragancia. Quiero información sobre sus perfumes.');
+  }
+  var nosotrosWa = $('nosotros-wa');
+  if (nosotrosWa && isValidWhatsApp(WHATSAPP)) {
+    nosotrosWa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, Mega Fragancia. Quiero más información.');
+  }
+
+  // ---------- Buscador ----------
+  var searchInput = $('search');
+  if (searchInput) {
+    searchInput.addEventListener('input', function (e) {
+      search = e.target.value;
+      renderGrid();
+    });
+  }
+
+  // ---------- Carrito: abrir/cerrar ----------
   document.addEventListener('click', function (e) {
     var t = e.target.closest && e.target.closest('#wa, #obar-btn');
     if (!t) return;
     if (t.getAttribute('aria-disabled') === 'true') e.preventDefault();
     if (t.id === 'obar-btn') {
       var d = $('dcart');
-      if (typeof d.showModal === 'function') d.showModal();
+      if (d && typeof d.showModal === 'function') d.showModal();
     }
   });
 
   $('cartbtn').addEventListener('click', function () {
     var d = $('dcart');
-    if (typeof d.showModal === 'function') d.showModal();
+    if (d && typeof d.showModal === 'function') d.showModal();
   });
 
-  // Modal de notas
-  var dn = $('dnotes');
-  function openNotes(p) {
-    notesTarget = p;
-    $('nt').textContent = p.n;
-    $('nsub').textContent = p.t + ' · ' + (p.desc || '');
-    $('n1').textContent = p.a.join(', ');
-    $('n2').textContent = p.b.join(', ');
-    $('n3').textContent = p.c.join(', ');
-    var btn = $('notes-add');
-    btn.textContent = cart[p.n] ? 'Añadir otra unidad' : 'Añadir al carrito';
-    if (typeof dn.showModal === 'function') dn.showModal();
-  }
-  $('notes-add').addEventListener('click', function () {
-    if (notesTarget) change(notesTarget.n, 1);
-    if (typeof dn.close === 'function') dn.close();
-  });
-
-  // Dialogs de footer
-  document.querySelectorAll('[data-dlg]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var id = b.getAttribute('data-dlg');
-      var d = document.getElementById(id);
-      if (d && typeof d.showModal === 'function') d.showModal();
-    });
-  });
+  // Cerrar dialogs (botón X, backdrop, ESC)
   document.querySelectorAll('[data-close]').forEach(function (b) {
     b.addEventListener('click', function () {
       var d = b.closest('dialog');
@@ -555,61 +539,55 @@
     d.addEventListener('click', function (e) {
       if (e.target === d && typeof d.close === 'function') d.close();
     });
-    // Nota: el evento `cancel` se usa para detectar ESC, pero NO se hace
-    // preventDefault aquí. Permitir el cierre con ESC es un requisito WCAG 2.1.1
-    // (Keyboard) y WAI-ARIA Authoring Practices para <dialog> modales.
   });
 
-  // Header sticky visual
+  // Botón "lnk" en el footer abre dialogs
+  document.querySelectorAll('[data-dlg]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var id = b.getAttribute('data-dlg');
+      var d = document.getElementById(id);
+      if (d && typeof d.showModal === 'function') d.showModal();
+    });
+  });
+
+  // ---------- Sticky header ----------
   var hdr = $('hdr');
   function onScroll() { hdr.classList.toggle('scrolled', window.scrollY > 12); }
   window.addEventListener('scroll', onScroll, { passive: true });
   onScroll();
 
-  // Reveal on scroll
+  // ---------- Reveal animation ----------
   if ('IntersectionObserver' in window) {
     var io = new IntersectionObserver(function (es) {
-      es.forEach(function (e) {
-        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
-      });
+      es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
     }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
     document.querySelectorAll('.reveal:not(.in)').forEach(function (n) { io.observe(n); });
   } else {
     document.querySelectorAll('.reveal').forEach(function (n) { n.classList.add('in'); });
   }
 
-  // Año dinámico en footer
+  // ---------- Año dinámico ----------
   var y = $('year');
   if (y) y.textContent = new Date().getFullYear();
 
-  // ---------- Panel de administración ----------
-  // Clave de acceso (cámbiala por la que quieras).
-  // Hash simple para no tener la clave en texto plano visible.
-  // NOTA DE SEGURIDAD: esto NO es seguridad real. El código es público en Netlify.
-  // Es solo una barrera para evitar que clientes finales toquen la promo por error.
-  var ADMIN_PASS_HASH = 'a32b91:1c2d3e'; // hash simple de "mega2026" - ver función checkPass()
+  // ============================================================
+  //                    PANEL DE ADMINISTRACIÓN
+  // ============================================================
 
-  // Genera un hash numérico básico a partir de la clave ingresada.
   function simpleHash(s) {
     var h = 5381;
-    for (var i = 0; i < s.length; i++) {
-      h = ((h << 5) + h) + s.charCodeAt(i);
-      h = h & 0x7fffffff;
-    }
+    for (var i = 0; i < s.length; i++) { h = ((h << 5) + h) + s.charCodeAt(i); h = h & 0x7fffffff; }
     return h.toString(36);
   }
+  var EXPECTED_PASS_HASH = simpleHash('mega2026');
 
-  // Para regenerar el hash: en la consola del navegador,
-  // escribe: simpleHash("tu_clave") y reemplaza el valor arriba.
-  // Clave actual: "mega2026" → hash "a32b91:1c2d3e" (verificado al instalar)
-  // (En esta versión se valida contra el hash precalculado al instalar)
+  function checkPass(input) { return simpleHash(input) === EXPECTED_PASS_HASH; }
 
   var dadmin = $('dadmin');
   var adminBtn = $('adminbtn');
 
   if (adminBtn && dadmin) {
     adminBtn.addEventListener('click', function () {
-      // Si ya está autenticado, abre directo al panel
       if (sessionStorage.getItem('mf_admin_ok') === '1') {
         showAdminPanel();
       } else {
@@ -618,6 +596,7 @@
       if (typeof dadmin.showModal === 'function') dadmin.showModal();
     });
 
+    // Login
     var adminForm = $('admin-form');
     if (adminForm) {
       adminForm.addEventListener('submit', function (e) {
@@ -634,36 +613,108 @@
       });
     }
 
-    var saveBtn = $('apromo-save');
-    if (saveBtn) saveBtn.addEventListener('click', savePromoFromForm);
+    // Tabs
+    document.querySelectorAll('.admin-tab').forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        var target = tab.dataset.tab;
+        document.querySelectorAll('.admin-tab').forEach(function (t) { t.setAttribute('aria-pressed', String(t === tab)); });
+        document.querySelectorAll('.admin-tab-panel').forEach(function (p) {
+          p.classList.toggle('on', p.dataset.panel === target);
+        });
+      });
+    });
 
-    var resetBtn = $('apromo-reset');
-    if (resetBtn) resetBtn.addEventListener('click', function () {
+    // Promo
+    $('apromo-save').addEventListener('click', function () {
+      promo = {
+        activo: $('apromo-activo').checked,
+        titulo: sanitizeLine($('apromo-titulo').value, 40) || PROMO_DEFAULT.titulo,
+        subtitulo: sanitizeLine($('apromo-subtitulo').value, 60) || PROMO_DEFAULT.subtitulo,
+        vigencia: sanitizeLine($('apromo-vigencia').value, 60) || PROMO_DEFAULT.vigencia,
+        precio: (function () { var n = Number($('apromo-precio').value); return Number.isFinite(n) && n > 0 ? n : PROMO_DEFAULT.precio; })()
+      };
+      savePromo();
+      renderPromo();
+      renderGrid();
+      renderCart();
+      showFeedback('apromo-feedback');
+    });
+
+    $('apromo-reset').addEventListener('click', function () {
       if (confirm('¿Restablecer la promoción a los valores por defecto?')) {
         promo = Object.assign({}, PROMO_DEFAULT);
         savePromo();
         renderPromo();
         renderGrid();
         renderCart();
-        fillAdminForm();
+        fillPromoForm();
+        showFeedback('apromo-feedback');
       }
     });
-  }
 
-  // Hash esperado para la clave "mega2026"
-  // Para cambiarla: ejecuta en consola: simpleHash("tu_nueva_clave") y reemplaza.
-  var EXPECTED_HASH = (function () {
-    var s = 'mega2026';
-    var h = 5381;
-    for (var i = 0; i < s.length; i++) {
-      h = ((h << 5) + h) + s.charCodeAt(i);
-      h = h & 0x7fffffff;
+    // Productos — agregar
+    var npFile = $('np-file');
+    var npPreview = $('np-preview');
+    var npImageData = '';
+
+    if (npFile) {
+      npFile.addEventListener('change', function (e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        if (file.size > 2 * 1024 * 1024) {
+          alert('La imagen es demasiado grande. Máximo 2MB.');
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+          npImageData = ev.target.result;
+          npPreview.textContent = '';
+          var img = document.createElement('img');
+          img.src = npImageData;
+          npPreview.appendChild(img);
+        };
+        reader.readAsDataURL(file);
+      });
     }
-    return h.toString(36);
-  })();
 
-  function checkPass(input) {
-    return simpleHash(input) === EXPECTED_HASH;
+    $('np-save').addEventListener('click', function () {
+      var nombre = sanitizeLine($('np-nombre').value, 60);
+      if (!nombre) { alert('Ingresa un nombre para el producto.'); return; }
+      var newP = {
+        n: nombre,
+        t: $('np-tipo').value,
+        h: Math.floor(Math.random() * 360),
+        desc: sanitizeLine($('np-desc').value, 200),
+        a: sanitizeLine($('np-salida').value, 100).split(',').map(function (s) { return s.trim(); }).filter(Boolean),
+        b: sanitizeLine($('np-corazon').value, 100).split(',').map(function (s) { return s.trim(); }).filter(Boolean),
+        c: sanitizeLine($('np-fondo').value, 100).split(',').map(function (s) { return s.trim(); }).filter(Boolean),
+        img: npImageData
+      };
+      DATA.push(newP);
+      saveProducts();
+      renderGrid();
+      renderProductsList();
+      // Reset form
+      $('np-nombre').value = '';
+      $('np-desc').value = '';
+      $('np-salida').value = '';
+      $('np-corazon').value = '';
+      $('np-fondo').value = '';
+      npImageData = '';
+      npPreview.textContent = 'Sin imagen';
+      showFeedback('np-feedback');
+    });
+
+    // Textos
+    $('as-save').addEventListener('click', function () {
+      site.hero_h1 = sanitizeLine($('as-hero-h1').value, 200);
+      site.hero_lead = sanitizeLine($('as-hero-lead').value, 500);
+      site.nosotros_texto = sanitizeLine($('as-nos-texto').value, 1000);
+      site.instagram = sanitizeLine($('as-ig').value, 200);
+      saveSite();
+      renderSite();
+      showFeedback('as-feedback');
+    });
   }
 
   function showAdminLogin() {
@@ -674,10 +725,12 @@
   function showAdminPanel() {
     $('admin-login').hidden = true;
     $('admin-panel').hidden = false;
-    fillAdminForm();
+    fillPromoForm();
+    fillSiteForm();
+    renderProductsList();
   }
 
-  function fillAdminForm() {
+  function fillPromoForm() {
     $('apromo-activo').checked = promo.activo;
     $('apromo-titulo').value = promo.titulo;
     $('apromo-subtitulo').value = promo.subtitulo;
@@ -685,42 +738,66 @@
     $('apromo-precio').value = promo.precio;
   }
 
-  function savePromoFromForm() {
-    promo = {
-      activo: $('apromo-activo').checked,
-      titulo: sanitizeLine($('apromo-titulo').value, 40) || PROMO_DEFAULT.titulo,
-      subtitulo: sanitizeLine($('apromo-subtitulo').value, 60) || PROMO_DEFAULT.subtitulo,
-      vigencia: sanitizeLine($('apromo-vigencia').value, 60) || PROMO_DEFAULT.vigencia,
-      precio: (function () {
-        var n = Number($('apromo-precio').value);
-        return Number.isFinite(n) && n > 0 && n < 100000000 ? n : PROMO_DEFAULT.precio;
-      })()
-    };
-    savePromo();
-    renderPromo();
-    renderGrid();
-    renderCart();
-    // Feedback visual
-    var btn = $('apromo-save');
-    var oldText = btn.textContent;
-    btn.textContent = '✓ Guardado';
-    btn.style.background = 'var(--ok)';
-    btn.style.borderColor = 'var(--ok)';
-    setTimeout(function () {
-      btn.textContent = oldText;
-      btn.style.background = '';
-      btn.style.borderColor = '';
-    }, 1500);
+  function fillSiteForm() {
+    $('as-hero-h1').value = site.hero_h1;
+    $('as-hero-lead').value = site.hero_lead;
+    $('as-nos-texto').value = site.nosotros_texto;
+    $('as-ig').value = site.instagram;
   }
 
-  // ---------- Hero WhatsApp link ----------
-  var heroWa = document.getElementById('hero-wa');
-  if (heroWa && isValidWhatsApp(WHATSAPP)) {
-    heroWa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, Mega Fragancia. Quiero información sobre sus perfumes.');
+  function renderProductsList() {
+    var list = $('products-list');
+    if (!list) return;
+    list.textContent = '';
+    DATA.forEach(function (p, idx) {
+      var li = el('li', 'admin-list-item');
+      var info = el('div', 'info');
+      info.appendChild(el('strong', '', p.n));
+      info.appendChild(el('small', '', p.t + ' · ' + (p.desc ? p.desc.slice(0, 60) : 'Sin descripción')));
+      li.appendChild(info);
+
+      if (p.img) {
+        var thumb = el('div', 'mini-thumb');
+        var tImg = document.createElement('img');
+        tImg.src = p.img;
+        tImg.alt = '';
+        thumb.appendChild(tImg);
+        li.appendChild(thumb);
+      }
+
+      var acts = el('div', 'acts');
+      var del = el('button', 'danger', 'Eliminar');
+      del.type = 'button';
+      del.addEventListener('click', function () {
+        if (confirm('¿Eliminar "' + p.n + '"? Esta acción no se puede deshacer.')) {
+          DATA.splice(idx, 1);
+          saveProducts();
+          delete cart[p.n];
+          saveCart();
+          renderGrid();
+          renderCart();
+          renderProductsList();
+        }
+      });
+      acts.appendChild(del);
+      li.appendChild(acts);
+      list.appendChild(li);
+    });
   }
 
-  // Primer render
+  function showFeedback(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.add('show');
+    setTimeout(function () { el.classList.remove('show'); }, 1800);
+  }
+
+  // ---------- Filtros ----------
+  var FILTERS = ['Todos', 'Hombre', 'Mujer', 'Unisex'];
+
+  // ---------- Inicialización ----------
   renderPromo();
+  renderSite();
   renderFilters();
   renderGrid();
   renderCart();
