@@ -1,0 +1,10 @@
+# netlify.toml — Mega Fragancia
+# Solo configuración de build. Las cabeceras de seguridad están en /_headers
+# (fuente única de verdad para evitar divergencias).
+
+[build]
+  # Sitio estático: no hay paso de build.
+  publish = "."
+
+[build.environment]
+  NODE_VERSION = "20"
