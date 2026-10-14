@@ -33,7 +33,7 @@
   # - base-uri 'none': previene <base href> malicioso
   # - frame-ancestors 'none': anti-clickjacking (refuerza X-Frame-Options)
   # - upgrade-insecure-requests: fuerza HTTPS para cualquier recurso
-  Content-Security-Policy: default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.github.com; form-action 'none'; base-uri 'none'; frame-ancestors 'none'; upgrade-insecure-requests; fetch-src 'self' https://api.github.com
+  Content-Security-Policy: default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.netlify.app; form-action 'none'; base-uri 'none'; frame-ancestors 'none'; upgrade-insecure-requests
 
   # Cross-Origin isolation
   Cross-Origin-Opener-Policy: same-origin

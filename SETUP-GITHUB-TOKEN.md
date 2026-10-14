@@ -1,82 +1,123 @@
-# Cómo configurar el GitHub Personal Access Token
+# Configuración de sincronización automática entre dispositivos
 
-El panel admin de Mega Fragancia usa un token de GitHub para subir cambios automáticamente a `data.json` cuando el cliente guarda algo (productos, promos, textos). Esto hace que **todos los dispositivos vean los cambios al instante** sin que tengas que tocar GitHub.
+## Cómo funciona
 
-## ⚠️ Importante
+1. El cliente (dueño de la tienda) abre el admin en su celular o computador
+2. Sube fotos, edita promos, agrega productos
+3. Click en "Guardar" → los datos se suben automáticamente a GitHub
+4. **Todos los dispositivos ven los cambios al instante**
 
-**El token NO va en el código del repositorio.** GitHub tiene una protección automática llamada "Push Protection" que rechaza commits con tokens. El token se ingresa desde la UI del panel admin y se guarda en `localStorage` del navegador (solo en ese dispositivo).
+El cliente **NO tiene que pegar ningún token**. Todo es automático.
 
-## Paso 1 — Crear el token en GitHub
+## Cómo funciona por debajo
+
+```
+Cliente hace click en "Guardar"
+        ↓
+Navegador envía los datos a la Netlify Function (en el servidor)
+        ↓
+Netlify Function (con tu token seguro guardado en Netlify)
+        ↓
+GitHub API actualiza data.json en el repo
+        ↓
+Netlify redespliega automáticamente
+        ↓
+Todos los dispositivos ven el cambio
+```
+
+**El token NUNCA se expone en el código del repositorio.** Vive seguro en las variables de entorno de Netlify.
+
+## Setup (lo haces UNA sola vez, 5 minutos)
+
+### Paso 1 — Crear el Personal Access Token en GitHub
 
 1. Abre https://github.com/settings/tokens/new
-2. Inicia sesión con tu cuenta `andrescuesta19`
-3. Llena el formulario:
-   - **Note (descripción):** `Mega Fragancia admin`
-   - **Expiration:** `No expiration` (o 1 año si prefieres renovar)
-4. En **"Select scopes"**, marca SOLO esta casilla:
-   - ✅ **`repo`** (acceso completo a repositorios privados)
-5. Click en **"Generate token"**
-6. **Copia el token** que aparece (empieza con `github_pat_...` o `ghp_...`)
+2. Inicia sesión con tu cuenta
+3. Llena:
+   - **Note:** `Mega Fragancia Netlify Function`
+   - **Expiration:** `No expiration` (o 1 año)
+   - **Scopes:** ✅ Solo `repo`
+4. Click **"Generate token"**
+5. **Copia el token** (empieza con `github_pat_...` o `ghp_...`)
 
-⚠️ **Importante:** GitHub solo te muestra el token UNA vez. Cópialo ahora.
+### Paso 2 — Configurar el token en Netlify
 
-## Paso 2 — Pegar el token en el sitio (UNA SOLA VEZ)
+1. Abre https://app.netlify.com
+2. Selecciona tu sitio `megafragancia-web`
+3. Ve a **Site configuration** → **Environment variables**
+4. Click en **"Add a variable"** → **"Add a single variable"**
+5. Llena:
+   - **Key:** `GITHUB_TOKEN`
+   - **Value:** pega el token que copiaste
+   - **Scope:** `All scopes` (o al menos `Production`)
+6. Click **"Create variable"**
 
-1. Abre el sitio en tu navegador: `https://[nombre].netlify.app`
-2. Click en el ícono de engranaje ⚙ (esquina superior derecha)
-3. Ingresa la clave `mega2026` y dale Enter
-4. En el panel admin, busca la sección plegable **"🔑 Configurar token de GitHub"**
-5. Click en ella para expandir
-6. Pega tu token en el campo
-7. Click en **"Guardar token"**
-8. Debe aparecer "✓ Token guardado. Ya puedes sincronizar."
+(Opcional, puedes agregar más variables para personalizar:)
+- `ADMIN_PASSWORD` → la clave del admin (default: `mega2026`)
+- `GITHUB_REPO` → el repo (default: `andrescuesta19/megafragancia-web`)
+- `GITHUB_BRANCH` → la rama (default: `main`)
 
-El token queda guardado en `localStorage` de tu navegador. **No se sube a GitHub ni se expone en ningún lado.**
+### Paso 3 — Re-desplegar
 
-## Paso 3 — Probar que funciona
+Después de agregar la variable, Netlify necesita re-desplegar para que la Function la use:
 
-1. En el mismo panel admin, cambia algo, por ejemplo el texto de la promo
-2. Click en "Guardar"
-3. Espera 5-10 segundos
-4. Debe aparecer "✓ Guardado y sincronizado"
-5. Abre el sitio en otro dispositivo (celular, otro computador) o en una ventana de incógnito
-6. Refresca con `Cmd + Shift + R` (Mac) o `Ctrl + Shift + R` (Windows)
-7. El cambio debe verse
+1. Ve a la pestaña **"Deploys"**
+2. Click en **"Trigger deploy"** → **"Deploy site"**
+3. Espera 30-60 segundos
+
+### Paso 4 — Probar
+
+1. Abre el sitio en tu celular
+2. Click en ⚙ del header
+3. Ingresa la clave `mega2026`
+4. Cambia algo (ej: el texto de la promo)
+5. Click "Guardar"
+6. Espera 5-10 segundos
+7. Debe decir "✓ Guardado y sincronizado"
+8. Abre el sitio en el computador (con `Cmd + Shift + R`)
+9. El cambio debe verse
 
 ## Si algo falla
 
-### "⚠ Guardado local. Error: ..."
-- El token puede ser incorrecto
-- Verifica que lo pegaste completo (son ~80 caracteres)
-- Verifica que tenga el scope `repo` marcado
+### "Error: GITHUB_TOKEN no configurado en Netlify"
+- La variable de entorno no se guardó bien
+- Verifica en **Site configuration → Environment variables** que existe `GITHUB_TOKEN` con el valor correcto
+- Re-despliega
+
+### "Error 401" o "Bad credentials"
+- El token es incorrecto o expiró
+- Genera uno nuevo y reemplázalo en Netlify
+
+### "Error 404" o "Not Found"
+- El nombre del repo es incorrecto
+- Verifica la variable `GITHUB_REPO` o el default
 
 ### El cambio no se ve en otros dispositivos
 - Refresca con `Ctrl + Shift + R` (o `Cmd + Shift + R` en Mac)
-- El archivo `data.json` puede tardar hasta 1 minuto en propagarse por la CDN de Netlify
+- Netlify puede tardar hasta 1 minuto en propagar el cambio
 
-### Error 401 (no autorizado)
-- El token es incorrecto, expiró o fue revocado
-- Genera uno nuevo en https://github.com/settings/tokens/new
+## Cómo revocar el token
 
-### Error 404 (no encontrado)
-- El repo no existe o el nombre es incorrecto
-- Verifica que el repo es `andrescuesta19/megafragancia-web` y que tienes acceso
-
-## Cómo revocar el token (si lo pierdes o quieres desactivarlo)
+Si quieres desactivar la sincronización automática:
 
 1. Abre https://github.com/settings/tokens
-2. Busca el token `Mega Fragancia admin`
+2. Busca `Mega Fragancia Netlify Function`
 3. Click en **"Delete"**
 
-A partir de ese momento, los "Guardar" en el panel admin mostrarán error de autenticación, pero el sitio seguirá funcionando con los datos que ya tiene.
+A partir de ese momento, el admin seguirá guardando localmente, pero no se sincronizará a GitHub.
 
-## Si borraste el caché del navegador
+## Sobre la seguridad
 
-Si se borra el `localStorage` (al limpiar datos del navegador), el token se pierde. Solo tienes que volver a hacer el Paso 2 (pegar el token de nuevo).
+- El token vive en Netlify (no en tu código, no en GitHub, no en el navegador del cliente)
+- Solo tú (el dueño del repo) puede verlo desde el dashboard de Netlify
+- El cliente final no tiene acceso al token en ningún momento
+- Netlify cifra las variables de entorno en reposo
 
-## ⚠️ Sobre la seguridad
+## ⚠️ Importante
 
-- El token queda en `localStorage` del navegador. **Cualquier persona con acceso físico a tu computador puede ver el token** abriendo DevTools → Application → Local Storage.
-- Si el computador lo usan varias personas, cierra sesión del admin después de usarlo.
-- El token da acceso completo al repo. Trátalo como una contraseña.
-- Si sospechas que el token está comprometido, revócalo inmediatamente en https://github.com/settings/tokens y crea uno nuevo.
+**NUNCA** pegues el token en:
+- El código del repo
+- localStorage del navegador
+- Un mensaje de chat o email
+
+Solo debe estar en la variable de entorno de Netlify.

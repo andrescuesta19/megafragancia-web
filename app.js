@@ -16,25 +16,45 @@
   var COMBO_PRECIO_DEFAULT = 300000;
   var DATA_URL = 'data.json';
 
-  // ---------- GitHub sync ----------
+  // ---------- Sincronización vía Netlify Function ----------
   // El admin guarda los cambios en data.json que está en el repo.
-  // Esto se hace con la GitHub API directamente desde el navegador.
-  // Ver SETUP-GITHUB-TOKEN.md para instrucciones.
-  var GITHUB_REPO = 'andrescuesta19/megafragancia-web';
-  var GITHUB_BRANCH = 'main';
-  var GITHUB_TOKEN = ''; // El token se ingresa desde el panel admin (no se guarda en el código)
+  // Esto se hace a través de una Netlify Function que tiene el token seguro.
+  // El cliente solo hace click en "Guardar" y todo se sincroniza automáticamente.
+  //
+  // La función está en /netlify/functions/save-data.js
+  // El token (GITHUB_TOKEN) se configura en Netlify Dashboard → Environment variables
+  // NO se guarda ningún token en el código del repositorio.
 
-  function getToken() {
-    if (GITHUB_TOKEN) return Promise.resolve(GITHUB_TOKEN);
-    return Promise.resolve(loadJSON('mf_github_token', '') || '');
-  }
+  var SYNC_ENDPOINT = '/.netlify/functions/save-data';
+  var ADMIN_PASSWORD = 'mega2026'; // Misma clave que el admin del sitio
 
-  function saveTokenToLocal(t) {
-    if (!t) {
-      try { localStorage.removeItem('mf_github_token'); } catch (e) {}
-    } else {
-      saveJSON('mf_github_token', t);
-    }
+  // Sube data.json a GitHub a través de la Netlify Function.
+  function uploadToGitHub(jsonStr, commitMsg) {
+    return fetch(SYNC_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Password': ADMIN_PASSWORD
+      },
+      body: JSON.stringify({
+        content: jsonStr,
+        message: commitMsg || 'Update data.json from admin'
+      })
+    })
+      .then(function (r) {
+        return r.json().then(function (body) {
+          return { ok: r.ok, status: r.status, body: body };
+        });
+      })
+      .then(function (r) {
+        if (r.ok && r.body && r.body.ok) {
+          return { ok: true };
+        }
+        return { ok: false, error: (r.body && r.body.error) || ('HTTP ' + r.status) };
+      })
+      .catch(function (e) {
+        return { ok: false, error: e.message || 'Error de red' };
+      });
   }
 
   // ---------- Helpers de almacenamiento local ----------
@@ -743,8 +763,7 @@
       showExportFeedback('apromo-feedback', '⏳ Guardando y sincronizando...');
       saveAndSync('mf_promo', promo, 'Update promo from admin').then(function (r) {
         if (r.ok) showExportFeedback('apromo-feedback', '✓ Guardado y sincronizado');
-        else if (r.error === 'no_token') showExportFeedback('apromo-feedback', '⚠ Guardado local. Configura el token de GitHub para sincronizar.');
-        else showExportFeedback('apromo-feedback', '⚠ Guardado local. Error al sincronizar: ' + r.error);
+        else showExportFeedback('apromo-feedback', '⚠ Guardado local. Error: ' + r.error);
       });
     });
 
@@ -819,7 +838,6 @@
       showExportFeedback('np-feedback', '⏳ Guardando y sincronizando...');
       saveAndSync('mf_products', DATA, 'Add product: ' + newP.n).then(function (r) {
         if (r.ok) showExportFeedback('np-feedback', '✓ Producto guardado y sincronizado');
-        else if (r.error === 'no_token') showExportFeedback('np-feedback', '⚠ Guardado local. Configura el token para sincronizar.');
         else showExportFeedback('np-feedback', '⚠ Guardado local. Error: ' + r.error);
       });
     });
@@ -834,7 +852,6 @@
       showExportFeedback('as-feedback', '⏳ Guardando y sincronizando...');
       saveAndSync('mf_site', site, 'Update site texts').then(function (r) {
         if (r.ok) showExportFeedback('as-feedback', '✓ Guardado y sincronizado');
-        else if (r.error === 'no_token') showExportFeedback('as-feedback', '⚠ Guardado local. Configura el token para sincronizar.');
         else showExportFeedback('as-feedback', '⚠ Guardado local. Error: ' + r.error);
       });
     });
@@ -860,43 +877,6 @@
         });
       });
     }
-
-    // Token de GitHub
-    var saveTokenBtn = $('save-token');
-    if (saveTokenBtn) {
-      saveTokenBtn.addEventListener('click', function () {
-        var t = sanitizeLine($('github-token').value, 100);
-        if (t) {
-          saveTokenToLocal(t);
-          GITHUB_TOKEN = t;
-          showExportFeedback('token-feedback', '✓ Token guardado. Ya puedes sincronizar.');
-          $('github-token').value = '';
-        } else {
-          showExportFeedback('token-feedback', '⚠ Ingresa un token válido');
-        }
-      });
-    }
-    var clearTokenBtn = $('clear-token');
-    if (clearTokenBtn) {
-      clearTokenBtn.addEventListener('click', function () {
-        if (confirm('¿Eliminar el token guardado?')) {
-          saveTokenToLocal('');
-          GITHUB_TOKEN = '';
-          showExportFeedback('token-feedback', '✓ Token eliminado');
-        }
-      });
-    }
-    // Mostrar/ocultar input de token según si hay token
-    getToken().then(function (t) {
-      var tokenSection = $('token-section');
-      if (tokenSection) {
-        if (t) {
-          tokenSection.innerHTML = '<p class="nsub" style="color: var(--ok);">✓ Token de GitHub configurado. Los cambios se sincronizan automáticamente.</p>';
-        } else {
-          // Mostrar el formulario de token
-        }
-      }
-    });
   }
 
   function showAdminLogin() {
@@ -1015,54 +995,6 @@
         };
       })
     };
-  }
-
-  // Sube data.json a GitHub. Devuelve una Promise.
-  function uploadToGitHub(jsonStr, commitMsg) {
-    return getToken().then(function (token) {
-      if (!token) {
-        return { ok: false, error: 'no_token' };
-      }
-      var url = 'https://api.github.com/repos/' + GITHUB_REPO + '/contents/' + DATA_URL;
-      // Primero obtenemos el SHA actual del archivo (necesario para actualizar)
-      return fetch(url, {
-        headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
-      })
-        .then(function (r) {
-          if (!r.ok) {
-            if (r.status === 404) return { sha: null }; // archivo no existe aún
-            return r.json().then(function (e) { throw new Error(e.message || 'HTTP ' + r.status); });
-          }
-          return r.json();
-        })
-        .then(function (info) {
-          // Subimos el archivo
-          var body = {
-            message: commitMsg || 'Update data.json from admin',
-            branch: GITHUB_BRANCH,
-            content: btoa(unescape(encodeURIComponent(jsonStr)))
-          };
-          if (info && info.sha) body.sha = info.sha;
-          return fetch(url, {
-            method: 'PUT',
-            headers: {
-              'Authorization': 'token ' + token,
-              'Accept': 'application/vnd.github.v3+json',
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
-          });
-        })
-        .then(function (r) {
-          if (!r.ok) {
-            return r.json().then(function (e) { return { ok: false, error: e.message || 'HTTP ' + r.status }; });
-          }
-          return { ok: true };
-        })
-        .catch(function (e) {
-          return { ok: false, error: e.message || 'Error de red' };
-        });
-    });
   }
 
   // Wrapper: guarda local Y sube a GitHub
