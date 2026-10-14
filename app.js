@@ -97,6 +97,35 @@
     }
   }
 
+  // Si el admin ya editó en este navegador, sus cambios están en localStorage.
+  // El admin guarda en localStorage Y en data.json (cuando hay backend).
+  // Aquí priorizamos los cambios locales del admin sobre el data.json remoto.
+  function applyLocalOverrides() {
+    var localPromo = loadJSON('mf_promo', null);
+    if (localPromo && typeof localPromo === 'object') {
+      promo = {
+        activo: Boolean(localPromo.activo),
+        titulo: typeof localPromo.titulo === 'string' ? localPromo.titulo.slice(0, 40) : PROMO_DEFAULT.titulo,
+        subtitulo: typeof localPromo.subtitulo === 'string' ? localPromo.subtitulo.slice(0, 60) : PROMO_DEFAULT.subtitulo,
+        vigencia: typeof localPromo.vigencia === 'string' ? localPromo.vigencia.slice(0, 60) : PROMO_DEFAULT.vigencia,
+        precio: Number.isFinite(Number(localPromo.precio)) && Number(localPromo.precio) > 0 ? Number(localPromo.precio) : PROMO_DEFAULT.precio
+      };
+    }
+    var localSite = loadJSON('mf_site', null);
+    if (localSite && typeof localSite === 'object') {
+      site = Object.assign({}, SITE_DEFAULT, localSite);
+    }
+    var localProducts = loadJSON('mf_products', null);
+    if (Array.isArray(localProducts) && localProducts.length) {
+      var arr = [];
+      localProducts.forEach(function (p) {
+        var s = sanitizeProduct(p);
+        if (s) arr.push(s);
+      });
+      if (arr.length) DATA = arr;
+    }
+  }
+
   // Carga data.json al iniciar. Si falla, usa defaults.
   function loadRemote() {
     return fetch(DATA_URL + '?t=' + Date.now(), { cache: 'no-store' })
@@ -648,22 +677,22 @@
         vigencia: sanitizeLine($('apromo-vigencia').value, 60) || PROMO_DEFAULT.vigencia,
         precio: (function () { var n = Number($('apromo-precio').value); return Number.isFinite(n) && n > 0 ? n : PROMO_DEFAULT.precio; })()
       };
+      saveJSON('mf_promo', promo);
       renderPromo();
       renderGrid();
       renderCart();
-      var json = downloadDataJSON();
-      showExportFeedback('apromo-feedback', '✓ Guardado · data.json descargado · súbelo a GitHub');
+      showExportFeedback('apromo-feedback', '✓ Promoción guardada');
     });
 
     $('apromo-reset').addEventListener('click', function () {
       if (confirm('¿Restablecer la promoción a los valores por defecto?')) {
         promo = Object.assign({}, PROMO_DEFAULT);
+        saveJSON('mf_promo', promo);
         renderPromo();
         renderGrid();
         renderCart();
         fillPromoForm();
-        downloadDataJSON();
-        showExportFeedback('apromo-feedback', '✓ Restablecido · data.json descargado');
+        showExportFeedback('apromo-feedback', '✓ Promoción restablecida');
       }
     });
 
@@ -676,8 +705,8 @@
       npFile.addEventListener('change', function (e) {
         var file = e.target.files[0];
         if (!file) return;
-        if (file.size > 500 * 1024) {
-          alert('La imagen es demasiado grande. Máximo 500KB para que data.json no pese mucho. Comprime la imagen o usa una más pequeña.');
+        if (file.size > 8 * 1024 * 1024) {
+          alert('La imagen es demasiado grande. Máximo 8MB.');
           return;
         }
         var reader = new FileReader();
@@ -706,9 +735,9 @@
         img: npImageData
       };
       DATA.push(newP);
+      saveJSON('mf_products', DATA);
       renderGrid();
       renderProductsList();
-      // Reset form
       $('np-nombre').value = '';
       $('np-desc').value = '';
       $('np-salida').value = '';
@@ -716,13 +745,8 @@
       $('np-fondo').value = '';
       npImageData = '';
       npPreview.textContent = 'Sin imagen';
-      downloadDataJSON();
-      showExportFeedback('np-feedback', '✓ Producto agregado · data.json descargado · súbelo a GitHub');
+      showExportFeedback('np-feedback', '✓ Producto agregado');
     });
-
-    // Productos — eliminar
-    // (override del handler que ya existía para que también descargue data.json)
-    // Se hace en renderProductsList más abajo
 
     // Textos
     $('as-save').addEventListener('click', function () {
@@ -730,12 +754,12 @@
       site.hero_lead = sanitizeLine($('as-hero-lead').value, 500);
       site.nosotros_texto = sanitizeLine($('as-nos-texto').value, 1000);
       site.instagram = sanitizeLine($('as-ig').value, 200);
+      saveJSON('mf_site', site);
       renderSite();
-      downloadDataJSON();
-      showExportFeedback('as-feedback', '✓ Guardado · data.json descargado · súbelo a GitHub');
+      showExportFeedback('as-feedback', '✓ Textos guardados');
     });
 
-    // Recargar desde servidor (útil después de subir el data.json a GitHub)
+    // Recargar
     var reloadBtn = $('admin-reload');
     if (reloadBtn) {
       reloadBtn.addEventListener('click', function () {
@@ -748,7 +772,7 @@
           renderProductsList();
           fillPromoForm();
           fillSiteForm();
-          showExportFeedback('reload-feedback', ok ? '✓ Recargado desde data.json' : '⚠ No se pudo recargar (usando cache)');
+          showExportFeedback('reload-feedback', ok ? '✓ Datos recargados' : '⚠ No se pudo recargar');
         });
       });
     }
@@ -806,15 +830,15 @@
       var del = el('button', 'danger', 'Eliminar');
       del.type = 'button';
       del.addEventListener('click', function () {
-        if (confirm('¿Eliminar "' + p.n + '"? Se descargará data.json actualizado.')) {
+        if (confirm('¿Eliminar "' + p.n + '"?')) {
           DATA.splice(idx, 1);
+          saveJSON('mf_products', DATA);
           delete cart[p.n];
           saveCart();
           renderGrid();
           renderCart();
           renderProductsList();
-          downloadDataJSON();
-          showExportFeedback('np-feedback', '✓ Eliminado · data.json descargado · súbelo a GitHub');
+          showExportFeedback('np-feedback', '✓ Producto eliminado');
         }
       });
       acts.appendChild(del);
@@ -841,48 +865,13 @@
   // ---------- Filtros ----------
   var FILTERS = ['Todos', 'Hombre', 'Mujer', 'Unisex'];
 
-  // ---------- Exportar data.json ----------
-  function buildDataJSON() {
-    return {
-      promo: {
-        activo: promo.activo,
-        titulo: promo.titulo,
-        subtitulo: promo.subtitulo,
-        vigencia: promo.vigencia,
-        precio: promo.precio
-      },
-      site: {
-        hero_h1: site.hero_h1,
-        hero_lead: site.hero_lead,
-        nosotros_texto: site.nosotros_texto,
-        instagram: site.instagram
-      },
-      productos: DATA.map(function (p) {
-        return {
-          n: p.n, t: p.t, h: p.h, img: p.img, desc: p.desc,
-          a: p.a, b: p.b, c: p.c
-        };
-      })
-    };
-  }
-
-  function downloadDataJSON() {
-    var data = buildDataJSON();
-    var json = JSON.stringify(data, null, 2);
-    var blob = new Blob([json], { type: 'application/json' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'data.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    return json;
-  }
+  // ---------- Guardado en localStorage (cada dispositivo mantiene su propio estado) ----------
+  // Por ahora: el admin guarda en localStorage del navegador actual.
+  // Para sincronizar entre dispositivos, se debe recargar el sitio después de editar.
 
   // ---------- Inicialización ----------
   loadRemote().then(function () {
+    applyLocalOverrides(); // Prioriza los cambios del admin en este navegador
     renderPromo();
     renderSite();
     renderFilters();
