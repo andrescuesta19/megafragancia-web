@@ -1,0 +1,39 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+
+# Backups
+*.bak
+*.tmp
+*.orig
+
+# Node (no usamos pero por si acaso)
+node_modules/
+package-lock.json
+
+# Imágenes placeholder de desarrollo
+# (descomentar si quieres ignorar assets/img durante desarrollo)
+# assets/img/*.tmp
