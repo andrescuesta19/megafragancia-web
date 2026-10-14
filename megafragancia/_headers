@@ -1,0 +1,54 @@
+/*
+  Cabeceras de seguridad para Netlify
+  ──────────────────────────────────
+  Esta es la ÚNICA fuente de verdad para headers en este proyecto.
+  Netlify los aplica a las rutas indicadas según el path matching.
+  Documentación: https://docs.netlify.com/routing/headers/
+*/
+
+/
+  # HTTPS obligatorio por 1 año, con subdominios y opt-in a la lista de preload
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+
+  # Evita que el navegador "adivine" el MIME type
+  X-Content-Type-Options: nosniff
+
+  # Anti-clickjacking: nadie puede embeber la página en un <iframe>
+  X-Frame-Options: DENY
+
+  # No enviamos la URL de procedencia al navegar a sitios externos
+  Referrer-Policy: no-referrer
+
+  # Desactiva APIs sensibles del navegador. Lista exhaustiva.
+  Permissions-Policy: accelerometer=(), autoplay=(), bluetooth=(), camera=(), display-capture=(), fullscreen=(), geolocation=(), gyroscope=(), hid=(), idle-detection=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), serial=(), sync-xhr=(), usb=(), xr-spatial-tracking=()
+
+  # Política de seguridad de contenido estricta.
+  # - default-src 'none': nada permitido por defecto
+  # - script-src 'self': solo archivos JS externos del mismo origen (sin inline, sin eval)
+  # - style-src 'self' 'unsafe-inline': necesario porque las páginas /politicas/*.html
+  #   tienen <style> embebidos y atributos style="" en línea. En la home no se usa,
+  #   pero mantener consistencia hasta migrar esos estilos a CSS externo.
+  # - img-src 'self' data:: solo imágenes del sitio + data URIs (favicon SVG)
+  # - form-action 'none': no hay formularios
+  # - base-uri 'none': previene <base href> malicioso
+  # - frame-ancestors 'none': anti-clickjacking (refuerza X-Frame-Options)
+  # - upgrade-insecure-requests: fuerza HTTPS para cualquier recurso
+  Content-Security-Policy: default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'; upgrade-insecure-requests
+
+  # Cross-Origin isolation
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+  Origin-Agent-Cluster: ?1
+
+  # Cache estándar
+  Cache-Control: public, max-age=300, must-revalidate
+
+# Assets: cacheables por 1 semana e inmutables
+/assets/*
+  Cache-Control: public, max-age=604800, immutable
+  X-Content-Type-Options: nosniff
+
+# Páginas de políticas: 1 día para reflejar cambios legales rápido
+/politicas/*
+  Cache-Control: public, max-age=86400, must-revalidate
+  X-Content-Type-Options: nosniff
