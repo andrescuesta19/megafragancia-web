@@ -1100,9 +1100,35 @@ dialog::backdrop {
   justify-content: center;
   overflow: hidden;
   border: 1px solid var(--line);
+  position: relative;
+  /* El scroll vertical sigue funcionando; el swipe horizontal lo toma JS */
+  touch-action: pan-y;
 }
-.pd-image img { max-width: 90%; max-height: 90%; object-fit: contain; }
+.pd-image img { max-width: 90%; max-height: 86%; object-fit: contain; -webkit-user-drag: none; user-select: none; }
 .pd-image svg { width: 60%; height: 60%; }
+
+/* Dots del carrusel de fotos (modal de detalle) */
+.pd-dots {
+  position: absolute;
+  bottom: 10px;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.pd-dot {
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--line-2, #ccc);
+  cursor: pointer;
+  transition: transform .15s ease, background .15s ease;
+}
+.pd-dot:hover { transform: scale(1.25); }
+.pd-dot.active { background: var(--gold, #c9a96a); transform: scale(1.35); }
 
 .pd-info h4 {
   font: 500 .78rem var(--sans);

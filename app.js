@@ -363,6 +363,31 @@
     if (typeof $('dproduct').showModal === 'function') $('dproduct').showModal();
   }
 
+  function gotoMedia(idx) {
+    if (idx === activeMediaIndex) return;
+    activeMediaIndex = idx;
+    renderDetailContent();
+  }
+
+  // Swipe lateral (touch y mouse) para pasar fotos sin botones de flecha
+  function attachSwipe(node, onNext, onPrev) {
+    var x0 = null, y0 = null, armed = false;
+    node.addEventListener('pointerdown', function (e) {
+      x0 = e.clientX; y0 = e.clientY; armed = true;
+    });
+    node.addEventListener('pointermove', function (e) {
+      if (!armed) return;
+      var dx = e.clientX - x0, dy = e.clientY - y0;
+      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
+        armed = false;
+        if (dx < 0) onNext(); else onPrev();
+      }
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) {
+      node.addEventListener(ev, function () { armed = false; x0 = null; y0 = null; });
+    });
+  }
+
   function renderDetailContent() {
     if (!productToOpen) return;
     var p = productToOpen;
@@ -385,6 +410,23 @@
       }
     } else {
       imgWrap.appendChild(buildBottleSVG(p.h));
+    }
+
+    // Navegación de galería: swipe lateral + dots (sin botones de flecha)
+    if (mediaToOpen.length > 1) {
+      attachSwipe(imgWrap,
+        function () { gotoMedia((activeMediaIndex + 1) % mediaToOpen.length); },
+        function () { gotoMedia((activeMediaIndex - 1 + mediaToOpen.length) % mediaToOpen.length); }
+      );
+      var dots = el('div', 'pd-dots');
+      mediaToOpen.forEach(function (m, idx) {
+        var d = el('button', 'pd-dot' + (idx === activeMediaIndex ? ' active' : ''));
+        d.type = 'button';
+        d.setAttribute('aria-label', 'Ver foto ' + (idx + 1) + ' de ' + mediaToOpen.length);
+        d.addEventListener('click', function () { gotoMedia(idx); });
+        dots.appendChild(d);
+      });
+      imgWrap.appendChild(dots);
     }
     content.appendChild(imgWrap);
 
@@ -745,6 +787,7 @@
   var npFiles = $('np-files');
   if (npFiles) {
     npFiles.addEventListener('change', function (e) {
+      var added = false;
       Array.from(e.target.files).forEach(function (file) {
         if (file.size > 50 * 1024 * 1024) {
           alert('"' + file.name + '" es demasiado grande. Máximo 50MB.');
@@ -756,9 +799,16 @@
           nombre: file.name,
           url: URL.createObjectURL(file)
         });
+        added = true;
         renderEditingMediaPreview();
       });
       npFiles.value = '';
+
+      // Auto-guardar apenas selecciona las fotos: si ya hay un producto en
+      // edición, o si es nuevo y ya tiene nombre escrito, sube sin botón.
+      if (added && (editingProductId || $('np-nombre').value.trim())) {
+        saveProduct();
+      }
     });
   }
 
