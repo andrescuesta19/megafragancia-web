@@ -20,7 +20,7 @@
 
   // ---------- Estado ----------
   var DATA = [];
-  var promo = { activo: true, titulo: '2× $300.000', subtitulo: 'Combo de octubre', vigencia: 'Cantidad limitada', precio: 300000 };
+  var promo = { activo: true, titulo: '2× 300.000', subtitulo: 'Combo de octubre', vigencia: 'Cantidad limitada', precio: 300000 };
   var site = {
     hero_h1: 'Perfumes árabes<br>y de nicho · <em>100% originales</em>',
     hero_lead: 'Elige tus fragancias, arma tu combo y paga solo cuando lo recibes.',
@@ -78,7 +78,7 @@
     if (txt !== undefined) e.textContent = txt;
     return e;
   }
-  function fmt(n) { return '$' + Number(n).toLocaleString('es-CO'); }
+  function fmt(n) { return Number(n).toLocaleString('es-CO'); }
   function sanitizeLine(s, max) {
     var cleaned = String(s == null ? '' : s).replace(/[\u0000-\u001F\u007F]/g, '').replace(/[ \t]+/g, ' ').trim();
     if (max && cleaned.length > max) cleaned = cleaned.slice(0, max);
@@ -575,6 +575,40 @@
     if (dp && typeof dp.close === 'function') dp.close();
   });
 
+  // ---------- Toast "Agregado al carrito" (se oculta solo) ----------
+  var toastTimer = null;
+  function closeToast() {
+    var t = $('toast');
+    if (t) t.classList.remove('on');
+    clearTimeout(toastTimer);
+  }
+  function showToast(p) {
+    var t = $('toast');
+    if (!t) return;
+    $('toast-name').textContent = p.n;
+    var thumb = $('toast-thumb');
+    thumb.textContent = '';
+    var cover = getCover(p);
+    if (cover) {
+      if (cover.tipo === 'video') {
+        var v = document.createElement('video');
+        v.src = cover.url; v.muted = true;
+        thumb.appendChild(v);
+      } else {
+        var i = document.createElement('img');
+        i.src = cover.url; i.alt = '';
+        thumb.appendChild(i);
+      }
+    }
+    t.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(closeToast, 2600);
+  }
+  $('toast-ver').addEventListener('click', function () {
+    closeToast();
+    openCart();
+  });
+
   // ---------- Carrito ----------
   function change(p, d) {
     var id = p.id;
@@ -584,6 +618,7 @@
     saveCart();
     renderGrid();
     renderCart();
+    if (d > 0) showToast(p);
   }
 
   function renderCart() {
@@ -775,18 +810,30 @@
   }
 
   // ---------- Dialogs ----------
+  // ---------- Carrito drawer lateral ----------
+  function openCart() {
+    $('dcart').classList.add('on');
+    $('cart-bg').classList.add('on');
+    closeToast();
+  }
+  function closeCart() {
+    $('dcart').classList.remove('on');
+    $('cart-bg').classList.remove('on');
+  }
+
   document.addEventListener('click', function (e) {
     var t = e.target.closest && e.target.closest('#wa, #obar-btn');
     if (!t) return;
     if (t.getAttribute('aria-disabled') === 'true') e.preventDefault();
-    if (t.id === 'obar-btn') {
-      var d = $('dcart');
-      if (d && typeof d.showModal === 'function') d.showModal();
-    }
+    if (t.id === 'obar-btn') openCart();
   });
-  $('cartbtn').addEventListener('click', function () {
-    var d = $('dcart');
-    if (d && typeof d.showModal === 'function') d.showModal();
+  $('cartbtn').addEventListener('click', openCart);
+  $('cart-bg').addEventListener('click', closeCart);
+  document.querySelectorAll('[data-close-cart]').forEach(function (b) {
+    b.addEventListener('click', closeCart);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeCart();
   });
   document.querySelectorAll('[data-close]').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -1110,7 +1157,7 @@
   $('apromo-reset').addEventListener('click', function () {
     if (!confirm('¿Restablecer?')) return;
     $('apromo-activo').checked = true;
-    $('apromo-titulo').value = '2× $300.000';
+    $('apromo-titulo').value = '2× 300.000';
     $('apromo-subtitulo').value = 'Combo de octubre';
     $('apromo-vigencia').value = 'Cantidad limitada';
     $('apromo-precio').value = 300000;

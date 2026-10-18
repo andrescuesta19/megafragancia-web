@@ -76,7 +76,7 @@
             <a href="https://www.instagram.com/mega.fragancia7/" target="_blank" rel="noopener noreferrer">Instagram</a>.
           </p>
           <div class="promo" id="promo-block">
-            <b id="promo-titulo">2× $300.000</b>
+            <b id="promo-titulo">2× 300.000</b>
             <span>
               <span id="promo-subtitulo">Combo de octubre</span><br>
               <small id="promo-vigencia">Cantidad limitada</small>
@@ -261,7 +261,7 @@
   <div class="order" id="orderbar" role="region" aria-label="Carrito de compras">
     <div class="order-info">
       <strong id="obar-count" aria-live="polite">0 fragancias</strong>
-      <small id="obar-sub">Agrega 2 para activar el combo 2×$300.000</small>
+      <small id="obar-sub">Agrega 2 para activar el combo 2× 300.000</small>
     </div>
     <button class="btn small" id="obar-btn" type="button" aria-disabled="true">Ver carrito</button>
   </div>
@@ -273,11 +273,12 @@
     </svg>
   </a>
 
-  <!-- ============ DIALOGS ============ -->
-  <dialog id="dcart" aria-labelledby="dcart-title">
+  <!-- ============ CARRITO (drawer lateral derecho) ============ -->
+  <div id="cart-bg" class="cart-bg"></div>
+  <aside id="dcart" class="cart-drawer" aria-labelledby="dcart-title">
     <header class="dlg-head">
       <h3 id="dcart-title">Tu carrito</h3>
-      <button class="x" data-close type="button" aria-label="Cerrar carrito">
+      <button class="x" data-close-cart type="button" aria-label="Cerrar carrito">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
@@ -290,9 +291,19 @@
     </div>
     <div class="dlg-foot">
       <a class="btn" id="wa" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">Pedir por WhatsApp</a>
-      <button class="btn ghost" data-close type="button">Seguir viendo</button>
+      <button class="btn ghost" data-close-cart type="button">Seguir viendo</button>
     </div>
-  </dialog>
+  </aside>
+
+  <!-- ============ TOAST "Añadido al carrito" (se oculta solo) ============ -->
+  <div id="toast" class="toast" role="status" aria-live="polite">
+    <div class="toast-thumb" id="toast-thumb"></div>
+    <div class="toast-body">
+      <div class="toast-title">✓ Agregado al carrito</div>
+      <div class="toast-name" id="toast-name"></div>
+      <button type="button" class="toast-ver" id="toast-ver">Ver carrito →</button>
+    </div>
+  </div>
 
   <!-- Modal de detalle de producto -->
   <dialog id="dproduct" aria-labelledby="dp-title">
@@ -385,8 +396,8 @@
             <label><input type="checkbox" id="apromo-activo" checked> Mostrar promoción activa</label>
           </div>
           <div class="admin-field">
-            <label for="apromo-titulo">Título (ej: "2× $300.000")</label>
-            <input type="text" id="apromo-titulo" maxlength="40" placeholder="2× $300.000">
+            <label for="apromo-titulo">Título (ej: "2× 300.000")</label>
+            <input type="text" id="apromo-titulo" maxlength="40" placeholder="2× 300.000">
           </div>
           <div class="admin-field">
             <label for="apromo-subtitulo">Subtítulo (ej: "Combo de octubre")</label>
