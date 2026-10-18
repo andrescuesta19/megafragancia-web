@@ -32,6 +32,15 @@
   var COMBO_PRECIO = COMBO_PRECIO_DEFAULT;
   var active = 'Todos';
   var search = '';
+
+  // Filtro "Combo del mes" — chip con el nombre del mes en curso
+  var COMBO_MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  var COMBO_LABEL = 'Combo ' + COMBO_MESES[new Date().getMonth()];
+
+  // Paginación del catálogo
+  var PAGE_SIZE = 10;
+  var page = 1;
   var productToOpen = null;
   var mediaToOpen = [];
   var activeMediaIndex = 0;
@@ -202,6 +211,7 @@
           b: p.notas_corazon || [],
           c: p.notas_fondo || [],
           h: p.color_h || 38,
+          combo: !!p.combo_mes,
           media: (p.media || []).map(function (m) { return { id: m.id, url: m.url, tipo: m.tipo, es_portada: m.es_portada, orden: m.orden }; })
         };
       });
@@ -233,13 +243,14 @@
   function renderFilters() {
     var fbox = $('filters');
     fbox.textContent = '';
-    ['Todos', 'Hombre', 'Mujer', 'Unisex'].forEach(function (f) {
-      var b = el('button', 'chip', f);
+    ['Todos', 'Hombre', 'Mujer', 'Unisex', COMBO_LABEL].forEach(function (f) {
+      var b = el('button', 'chip' + (f === COMBO_LABEL ? ' chip-combo' : ''), f);
       b.type = 'button';
       b.setAttribute('aria-pressed', String(f === active));
       b.setAttribute('aria-controls', 'grid');
       b.addEventListener('click', function () {
         active = f;
+        page = 1; // volver a la primera página al cambiar de filtro
         renderFilters();
         renderGrid();
       });
@@ -260,14 +271,30 @@
 
     var q = sanitizeLine(search, 40).toLowerCase();
     var visible = DATA.filter(function (p) {
-      if (active !== 'Todos' && p.t !== active) return false;
+      if (active === COMBO_LABEL) {
+        if (!p.combo) return false;
+      } else if (active !== 'Todos' && p.t !== active) return false;
       if (q && p.n.toLowerCase().indexOf(q) === -1) return false;
       return true;
     });
-    if (!visible.length) { empty.hidden = false; return; }
-    empty.hidden = true;
 
-    visible.forEach(function (p) {
+    // Contador de fragancias del catálogo
+    var count = $('cat-count');
+    if (count) count.textContent = visible.length === 1 ? '1 fragancia' : visible.length + ' fragancias';
+
+    // Paginación: 10 por página
+    var pagination = $('pagination');
+    var totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+    if (page > totalPages) page = totalPages;
+    if (!visible.length) {
+      empty.hidden = false;
+      if (pagination) pagination.hidden = true;
+      return;
+    }
+    empty.hidden = true;
+    var slice = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+    slice.forEach(function (p) {
       var card = el('article', 'card reveal in');
       card.setAttribute('aria-label', p.n + ', ' + p.t);
 
@@ -351,6 +378,50 @@
         openProductDetail(p);
       });
     });
+
+    renderPagination(totalPages);
+  }
+
+  function renderPagination(totalPages) {
+    var box = $('pagination');
+    if (!box) return;
+    box.textContent = '';
+    // Solo mostrar si hay más de una página
+    box.hidden = totalPages <= 1;
+    if (totalPages <= 1) return;
+
+    function goto(n) {
+      if (n < 1 || n > totalPages || n === page) return;
+      page = n;
+      renderGrid();
+      var cat = document.getElementById('catalogo');
+      if (cat) cat.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    var prev = el('button', 'page-btn', '‹ Anterior');
+    prev.type = 'button';
+    prev.disabled = page === 1;
+    prev.addEventListener('click', function () { goto(page - 1); });
+    box.appendChild(prev);
+
+    var nums = el('div', 'page-nums');
+    for (var i = 1; i <= totalPages; i++) {
+      (function (n) {
+        var b = el('button', 'page-num' + (n === page ? ' active' : ''), String(n));
+        b.type = 'button';
+        b.setAttribute('aria-label', 'Página ' + n);
+        if (n === page) b.setAttribute('aria-current', 'page');
+        b.addEventListener('click', function () { goto(n); });
+        nums.appendChild(b);
+      })(i);
+    }
+    box.appendChild(nums);
+
+    var next = el('button', 'page-btn', 'Siguiente ›');
+    next.type = 'button';
+    next.disabled = page === totalPages;
+    next.addEventListener('click', function () { goto(page + 1); });
+    box.appendChild(next);
   }
 
   // ---------- Modal de detalle ----------
@@ -610,7 +681,7 @@
   // ---------- Buscador ----------
   var searchInput = $('search');
   if (searchInput) {
-    searchInput.addEventListener('input', function (e) { search = e.target.value; renderGrid(); });
+    searchInput.addEventListener('input', function (e) { search = e.target.value; page = 1; renderGrid(); });
   }
 
   // ---------- Promo y textos ----------
@@ -866,6 +937,7 @@
     $('np-salida').value = '';
     $('np-corazon').value = '';
     $('np-fondo').value = '';
+    if ($('np-combo')) $('np-combo').checked = false;
     renderEditingMediaPreview();
     $('np-save').textContent = 'Agregar producto';
     $('np-cancel').style.display = 'none';
@@ -881,6 +953,7 @@
     $('np-salida').value = (p.a || []).join(', ');
     $('np-corazon').value = (p.b || []).join(', ');
     $('np-fondo').value = (p.c || []).join(', ');
+    if ($('np-combo')) $('np-combo').checked = !!p.combo;
     editingMediaFiles = [];
     renderEditingMediaPreview();
     $('np-save').textContent = 'Guardar cambios';
@@ -909,6 +982,7 @@
     fd.append('notas_corazon', JSON.stringify(sanitizeLine($('np-corazon').value, 200).split(',').map(function (s) { return s.trim(); }).filter(Boolean)));
     fd.append('notas_fondo', JSON.stringify(sanitizeLine($('np-fondo').value, 200).split(',').map(function (s) { return s.trim(); }).filter(Boolean)));
     fd.append('color_h', String(Math.floor(Math.random() * 360)));
+    fd.append('combo_mes', $('np-combo') && $('np-combo').checked ? 'true' : 'false');
     // Tomar el lote actual: lo que llegue MIENTRAS sube queda en la lista nueva
     var lote = editingMediaFiles;
     editingMediaFiles = [];

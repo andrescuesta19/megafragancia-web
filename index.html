@@ -110,7 +110,9 @@
         </div>
 
         <div class="filters" id="filters" role="group" aria-label="Filtrar por tipo"></div>
+        <p class="cat-count" id="cat-count" aria-live="polite"></p>
         <div class="grid" id="grid"></div>
+        <nav class="pagination" id="pagination" aria-label="Paginación del catálogo" hidden></nav>
 
         <p class="empty" id="empty" hidden>No hay fragancias que coincidan con tu búsqueda.</p>
       </div>
@@ -450,6 +452,12 @@
             <div class="admin-field">
               <label for="np-fondo">Notas de fondo</label>
               <input type="text" id="np-fondo" placeholder="Vainilla, Pachulí">
+            </div>
+            <div class="admin-field">
+              <label class="combo-check">
+                <input type="checkbox" id="np-combo">
+                Mostrar en el filtro <strong>Combo del mes</strong> de la tienda
+              </label>
             </div>
             <div class="admin-field">
               <label>Fotos y videos del producto (puedes agregar varios)</label>
