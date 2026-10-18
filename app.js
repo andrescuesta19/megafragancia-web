@@ -618,6 +618,9 @@
     var elTitulo = $('promo-titulo');
     if (!elTitulo) return;
     if (promo.activo) {
+      // Restaurar visibilidad si antes se había ocultado (mismo DOM)
+      var blockOn = $('promo-block');
+      if (blockOn) blockOn.style.display = '';
       elTitulo.textContent = promo.titulo;
       var elSub = $('promo-subtitulo');
       if (elSub) {
@@ -723,6 +726,11 @@
   function showAdminLogin() {
     $('admin-login').hidden = false;
     $('admin-panel').hidden = true;
+    // Volver al paso 1 (email) sin contraseña en pantalla
+    var s2 = $('login-step2');
+    if (s2) s2.classList.remove('show');
+    var p = $('admin-pass');
+    if (p) p.value = '';
   }
   function showAdminPanel() {
     $('admin-login').hidden = true;
@@ -1045,18 +1053,51 @@
 
     var adminForm = $('admin-form');
     if (adminForm) {
+      // --- Login en 2 pasos: email → (animación) → contraseña + Entrar ---
+      var emailInput = $('admin-email');
+      var step2 = $('login-step2');
+      function mostrarPaso2() {
+        if (!emailInput.value || emailInput.value.indexOf('@') < 1) return;
+        if (step2 && !step2.classList.contains('show')) {
+          step2.classList.add('show');
+          var passEl = $('admin-pass');
+          if (passEl) passEl.focus();
+        }
+      }
+      function ocultarPaso2() {
+        if (step2) step2.classList.remove('show');
+        var passEl = $('admin-pass');
+        if (passEl) passEl.value = '';
+      }
+      if (emailInput) {
+        emailInput.addEventListener('blur', mostrarPaso2);
+        emailInput.addEventListener('input', function () {
+          if (emailInput.value.indexOf('@') < 1) ocultarPaso2();
+        });
+      }
+
       adminForm.addEventListener('submit', async function (e) {
         e.preventDefault();
-        var email = $('admin-email').value;
-        var password = $('admin-pass').value;
         $('admin-error').hidden = true;
+        // Si aún no se mostró el paso de contraseña, mostrarlo y salir
+        if (step2 && !step2.classList.contains('show')) { mostrarPaso2(); return; }
+        var email = emailInput.value;
+        var password = $('admin-pass').value;
+        if (!password) {
+          $('admin-error').textContent = 'Ingresa tu contraseña.';
+          $('admin-error').hidden = false;
+          return;
+        }
         try {
           var res = await apiPost('/api/auth/login', { email: email, password: password });
           if (res.error) throw new Error(res.error);
           authToken = res.token;
+          // Sesión persistente: el JWT dura 30 días — no vuelve a pedir login
+          try { localStorage.setItem('mf_token', res.token); } catch (_) {}
           showAdminPanel();
           $('admin-email').value = '';
           $('admin-pass').value = '';
+          ocultarPaso2();
         } catch (err) {
           $('admin-error').textContent = 'Email o contraseña incorrectos.';
           $('admin-error').hidden = false;
@@ -1068,6 +1109,7 @@
     if (logoutBtn) {
       logoutBtn.addEventListener('click', function () {
         authToken = null;
+        try { localStorage.removeItem('mf_token'); } catch (_) {}
         showAdminLogin();
       });
     }
@@ -1084,10 +1126,31 @@
   // ============================================================
   //                    INICIALIZACIÓN
   // ============================================================
+
+  // Restaurar sesión guardada (JWT de 30 días) — no vuelve a pedir login
+  try {
+    var tokenGuardado = localStorage.getItem('mf_token');
+    if (tokenGuardado) {
+      var payload = JSON.parse(atob(tokenGuardado.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (payload.exp && payload.exp * 1000 > Date.now()) {
+        authToken = tokenGuardado;
+      } else {
+        localStorage.removeItem('mf_token'); // expirado
+      }
+    }
+  } catch (_) {
+    try { localStorage.removeItem('mf_token'); } catch (__) {}
+  }
+
   renderFilters();
   renderPromo();
   renderSite();
   loadAll().then(function () {
+    // Re-renderizar con lo que diga EL SERVIDOR: sin esto el banner se
+    // quedaba con el default (activo: true) aunque el admin lo había
+    // desactivado — parecía que la promo "volvía sola" al recargar.
+    renderPromo();
+    renderSite();
     renderGrid();
     renderCart();
     renderWAFAB();

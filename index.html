@@ -346,16 +346,26 @@
     </header>
     <div class="dlg-body">
       <div id="admin-login">
-        <p class="nsub">Ingresa tu email y contraseña para acceder al panel.</p>
-        <form id="admin-form" class="admin-form" autocomplete="off">
-          <label for="admin-email" class="sr-only">Email</label>
-          <input type="email" id="admin-email" placeholder="Email" required style="flex: 1 1 100%; margin-bottom: 8px;">
-          <label for="admin-pass" class="sr-only">Contraseña</label>
-          <input type="password" id="admin-pass" placeholder="Contraseña" required style="flex: 1;">
-          <button class="btn" type="submit">Entrar</button>
-        </form>
-        <p id="admin-error" class="admin-err" hidden>Email o contraseña incorrectos.</p>
-        <p class="admin-hint">La autenticación se hace con Supabase. El usuario se crea una sola vez en el dashboard de Supabase.</p>
+        <div class="login-grid">
+          <div class="login-brand">
+            <img src="assets/img/logo-original.jpg" alt="" class="login-logo" width="72" height="72">
+            <span class="login-brand-name">Mega Fragancia</span>
+            <span class="login-brand-sub">Panel de administración</span>
+          </div>
+          <div class="login-side">
+            <p class="nsub">Ingresa tu email para comenzar.</p>
+            <form id="admin-form" class="admin-form login-form" autocomplete="on">
+              <label for="admin-email" class="sr-only">Email</label>
+              <input type="email" id="admin-email" placeholder="Tu email" autocomplete="email">
+              <div class="login-step2" id="login-step2">
+                <label for="admin-pass" class="sr-only">Contraseña</label>
+                <input type="password" id="admin-pass" placeholder="Contraseña" autocomplete="current-password">
+                <button class="btn login-enter" type="submit">Entrar</button>
+              </div>
+            </form>
+            <p id="admin-error" class="admin-err" hidden>Email o contraseña incorrectos.</p>
+          </div>
+        </div>
       </div>
 
       <div id="admin-panel" hidden>
