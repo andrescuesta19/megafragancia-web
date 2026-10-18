@@ -881,9 +881,15 @@
     $('np-nombre').focus();
   }
 
+  var saveInProgress = false;
+
   async function saveProduct() {
     var nombre = sanitizeLine($('np-nombre').value, 60);
     if (!nombre) { alert('Ingresa un nombre.'); return; }
+    // Si ya hay un upload en curso, no superponer: los archivos que lleguen
+    // quedan en editingMediaFiles y se suben solos al terminar (ver abajo).
+    if (saveInProgress) return;
+    saveInProgress = true;
 
     var fd = new FormData();
     fd.append('nombre', nombre);
@@ -895,25 +901,50 @@
     fd.append('notas_corazon', JSON.stringify(sanitizeLine($('np-corazon').value, 200).split(',').map(function (s) { return s.trim(); }).filter(Boolean)));
     fd.append('notas_fondo', JSON.stringify(sanitizeLine($('np-fondo').value, 200).split(',').map(function (s) { return s.trim(); }).filter(Boolean)));
     fd.append('color_h', String(Math.floor(Math.random() * 360)));
-    editingMediaFiles.forEach(function (m) { fd.append('files', m.file, m.nombre); });
+    // Tomar el lote actual: lo que llegue MIENTRAS sube queda en la lista nueva
+    var lote = editingMediaFiles;
+    editingMediaFiles = [];
+    renderEditingMediaPreview();
+    lote.forEach(function (m) { fd.append('files', m.file, m.nombre); });
 
     showExportFeedback('np-feedback', '⏳ Subiendo...');
+    var reSave = false;
     try {
       var res = editingProductId
         ? await apiPutMultipart('/api/admin/productos/' + editingProductId, fd)
         : await apiPostMultipart('/api/admin/productos', fd);
       if (res.error) throw new Error(res.error);
+
+      // Si era producto nuevo, anclar el id para que el re-save haga PUT
+      // (no POST) y no duplique el producto
+      if (!editingProductId && res.id) editingProductId = res.id;
+
       await loadAll();
       renderPromo();
       renderSite();
       renderGrid();
       renderCart();
       renderProductsList();
-      resetEditForm();
-      showExportFeedback('np-feedback', '✓ Producto guardado');
+
+      if (editingMediaFiles.length) {
+        // Llegaron fotos mientras subía: el form sigue intacto (nombre y
+        // campos presentes) — se re-guarda de inmediato con ese lote.
+        reSave = true;
+        showExportFeedback('np-feedback', '⏳ Subiendo fotos adicionales...');
+      } else {
+        resetEditForm();
+        showExportFeedback('np-feedback', '✓ Producto guardado');
+      }
     } catch (e) {
+      // Devolver el lote al form para que el usuario pueda reintentar
+      editingMediaFiles = lote.concat(editingMediaFiles);
+      renderEditingMediaPreview();
       showExportFeedback('np-feedback', '⚠ Error: ' + (e.message || e));
+    } finally {
+      saveInProgress = false;
     }
+    // Recursiva SOLO después de liberar el flag (finally ya corrió)
+    if (reSave) return saveProduct();
   }
 
   async function deleteProduct(p) {
