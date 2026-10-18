@@ -444,7 +444,17 @@
     activeMediaIndex = 0;
     $('dp-title').textContent = p.n;
     renderDetailContent();
+    updateDpAdd();
     if (typeof $('dproduct').showModal === 'function') $('dproduct').showModal();
+  }
+
+  // Botón del modal: refleja SIEMPRE el estado real del carrito.
+  // Antes decía "Añadir al carrito" incluso cuando el producto ya estaba.
+  function updateDpAdd() {
+    var btn = $('dp-add');
+    if (!btn || !productToOpen) return;
+    var q = cart[productToOpen.id] || 0;
+    btn.textContent = q ? ('En carrito (' + q + ') — añadir otra') : 'Añadir al carrito';
   }
 
   function gotoMedia(idx) {
@@ -668,7 +678,20 @@
     }
     oBtn.setAttribute('aria-disabled', u ? 'false' : 'true');
     if (u > 0) obar.classList.add('on'); else obar.classList.remove('on');
+
+    // Mantener el botón del modal de detalle sincronizado si está abierto
+    updateDpAdd();
   }
+
+  // Sincronizar carrito si cambia en OTRA pestaña/ventana del mismo navegador.
+  // Sin esto, la barra de pedido se quedaba "persistentemente" con el estado
+  // viejo de la otra ventana (el bug reportado).
+  window.addEventListener('storage', function (e) {
+    if (e.key !== 'mf_cart') return;
+    cart = loadCart();
+    renderGrid();
+    renderCart();
+  });
 
   // ---------- WhatsApp UI ----------
   function renderWAFAB() {
