@@ -1125,9 +1125,13 @@ dialog::backdrop {
 }
 
 /* ===================== MODAL DETALLE DE PRODUCTO ===================== */
+/* En desktop el modal del detalle es más ancho que los demás diálogos:
+   con el ancho base (600px) la foto quedaba en ~260px — ilegible. */
+#dproduct { max-width: 920px; }
 .product-detail {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* Columna de foto más ancha que la de texto en desktop */
+  grid-template-columns: 1.15fr .85fr;
   gap: 24px;
   align-items: start;
 }
@@ -1147,7 +1151,7 @@ dialog::backdrop {
   /* El scroll vertical sigue funcionando; el swipe horizontal lo toma JS */
   touch-action: pan-y;
 }
-.pd-image img { max-width: 90%; max-height: 86%; object-fit: contain; -webkit-user-drag: none; user-select: none; }
+.pd-image img { max-width: 95%; max-height: 92%; object-fit: contain; -webkit-user-drag: none; user-select: none; }
 .pd-image svg { width: 60%; height: 60%; }
 
 /* Dots del carrusel de fotos (modal de detalle) */
