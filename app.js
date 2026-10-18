@@ -33,10 +33,13 @@
   var active = 'Todos';
   var search = '';
 
-  // Filtro "Combo del mes" — chip con el nombre del mes en curso
-  var COMBO_MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-  var COMBO_LABEL = 'Combo ' + COMBO_MESES[new Date().getMonth()];
+  // Filtros de combo — chips dinámicos según los combo_nombre del catálogo.
+  // comboLabel: si el admin escribe "Octubre" → chip "Combo Octubre";
+  // si escribe "Combo Xiembra" (empieza con "combo") se usa tal cual.
+  function comboLabel(nombre) {
+    var n = String(nombre || '').trim();
+    return /^combo\b/i.test(n) ? n : 'Combo ' + n;
+  }
 
   // Paginación del catálogo
   var PAGE_SIZE = 10;
@@ -211,7 +214,7 @@
           b: p.notas_corazon || [],
           c: p.notas_fondo || [],
           h: p.color_h || 38,
-          combo: !!p.combo_mes,
+          comboNombre: p.combo_nombre || '',
           media: (p.media || []).map(function (m) { return { id: m.id, url: m.url, tipo: m.tipo, es_portada: m.es_portada, orden: m.orden }; })
         };
       });
@@ -243,8 +246,15 @@
   function renderFilters() {
     var fbox = $('filters');
     fbox.textContent = '';
-    ['Todos', 'Hombre', 'Mujer', 'Unisex', COMBO_LABEL].forEach(function (f) {
-      var b = el('button', 'chip' + (f === COMBO_LABEL ? ' chip-combo' : ''), f);
+    // Chips de combo: uno por cada combo_nombre único presente en el catálogo
+    var combos = [];
+    DATA.forEach(function (p) {
+      if (p.comboNombre && combos.indexOf(p.comboNombre) === -1) combos.push(p.comboNombre);
+    });
+    var comboChips = combos.map(comboLabel);
+    ['Todos', 'Hombre', 'Mujer', 'Unisex'].concat(comboChips).forEach(function (f) {
+      var esCombo = comboChips.indexOf(f) !== -1;
+      var b = el('button', 'chip' + (esCombo ? ' chip-combo' : ''), f);
       b.type = 'button';
       b.setAttribute('aria-pressed', String(f === active));
       b.setAttribute('aria-controls', 'grid');
@@ -271,8 +281,13 @@
 
     var q = sanitizeLine(search, 40).toLowerCase();
     var visible = DATA.filter(function (p) {
-      if (active === COMBO_LABEL) {
-        if (!p.combo) return false;
+      var comboChips = [];
+      DATA.forEach(function (p) {
+        if (p.comboNombre && comboChips.indexOf(comboLabel(p.comboNombre)) === -1) comboChips.push(comboLabel(p.comboNombre));
+      });
+      if (comboChips.indexOf(active) !== -1) {
+        // Filtro activo = un combo con nombre
+        if (!p.comboNombre || comboLabel(p.comboNombre) !== active) return false;
       } else if (active !== 'Todos' && p.t !== active) return false;
       if (q && p.n.toLowerCase().indexOf(q) === -1) return false;
       return true;
@@ -301,7 +316,7 @@
       var wrap = el('div', 'bottle-wrap');
       var tagRow = el('div', 'tag-row');
       tagRow.appendChild(el('span', 'tag cat-' + p.t.toLowerCase(), p.t));
-      tagRow.appendChild(el('span', 'tag combo-badge', 'Combo'));
+      if (p.comboNombre) tagRow.appendChild(el('span', 'tag combo-badge', 'Combo'));
       wrap.appendChild(tagRow);
 
       var cover = getCover(p);
@@ -352,9 +367,7 @@
           price.appendChild(ps);
         }
       } else {
-        price.appendChild(document.createTextNode(fmt(Math.floor(COMBO_PRECIO / 2)) + ' c/u'));
-        var small = el('small', '', 'o 2× ' + fmt(COMBO_PRECIO) + ' en combo');
-        price.appendChild(small);
+        price.appendChild(el('span', 'price-ask', 'Consultar precio'));
       }
       body.appendChild(price);
 
@@ -513,9 +526,7 @@
         price.appendChild(ps);
       }
     } else {
-      price.appendChild(document.createTextNode(fmt(Math.floor(COMBO_PRECIO / 2)) + ' c/u'));
-      var small = el('small', '', 'o 2× ' + fmt(COMBO_PRECIO) + ' en combo');
-      price.appendChild(small);
+      price.appendChild(el('span', 'price-ask', 'Consultar precio'));
     }
     info.appendChild(price);
     info.appendChild(el('p', 'desc', p.desc || 'Fragancia de la colección.'));
@@ -937,7 +948,7 @@
     $('np-salida').value = '';
     $('np-corazon').value = '';
     $('np-fondo').value = '';
-    if ($('np-combo')) $('np-combo').checked = false;
+    if ($('np-combo-nombre')) $('np-combo-nombre').value = '';
     renderEditingMediaPreview();
     $('np-save').textContent = 'Agregar producto';
     $('np-cancel').style.display = 'none';
@@ -953,7 +964,7 @@
     $('np-salida').value = (p.a || []).join(', ');
     $('np-corazon').value = (p.b || []).join(', ');
     $('np-fondo').value = (p.c || []).join(', ');
-    if ($('np-combo')) $('np-combo').checked = !!p.combo;
+    if ($('np-combo-nombre')) $('np-combo-nombre').value = p.comboNombre || '';
     editingMediaFiles = [];
     renderEditingMediaPreview();
     $('np-save').textContent = 'Guardar cambios';
@@ -982,7 +993,7 @@
     fd.append('notas_corazon', JSON.stringify(sanitizeLine($('np-corazon').value, 200).split(',').map(function (s) { return s.trim(); }).filter(Boolean)));
     fd.append('notas_fondo', JSON.stringify(sanitizeLine($('np-fondo').value, 200).split(',').map(function (s) { return s.trim(); }).filter(Boolean)));
     fd.append('color_h', String(Math.floor(Math.random() * 360)));
-    fd.append('combo_mes', $('np-combo') && $('np-combo').checked ? 'true' : 'false');
+    fd.append('combo_nombre', $('np-combo-nombre') ? $('np-combo-nombre').value : '');
     // Tomar el lote actual: lo que llegue MIENTRAS sube queda en la lista nueva
     var lote = editingMediaFiles;
     editingMediaFiles = [];
@@ -1225,6 +1236,7 @@
     // desactivado — parecía que la promo "volvía sola" al recargar.
     renderPromo();
     renderSite();
+    renderFilters(); // los chips de combo dependen de los combo_nombre cargados
     renderGrid();
     renderCart();
     renderWAFAB();
