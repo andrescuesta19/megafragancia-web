@@ -11,8 +11,8 @@
     if (window.MEGA_FRAG_CONFIG && window.MEGA_FRAG_CONFIG.apiBase) {
       return window.MEGA_FRAG_CONFIG.apiBase;
     }
-    // Default: el backend en Render (CAMBIAR después del deploy)
-    return 'https://megafragancia-backend-XXXX.onrender.com';
+    // Default: el backend en Render (producción)
+    return 'https://megafragancia-backend.onrender.com';
   })();
 
   var WHATSAPP_DEFAULT = '573106399810';
