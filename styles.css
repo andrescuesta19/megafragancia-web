@@ -1538,6 +1538,11 @@ dialog::backdrop {
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+/* Tipo + Presentación + Combo del mes en un mismo renglón */
+.admin-row.cols3 { grid-template-columns: 1fr 1fr 1fr; }
+@media (max-width: 640px) {
+  .admin-row.cols3 { grid-template-columns: 1fr; }
+}
 @media (max-width: 520px) { .admin-row { grid-template-columns: 1fr; } }
 
 .admin-actions {

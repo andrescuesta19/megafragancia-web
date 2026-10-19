@@ -420,7 +420,7 @@
               <label for="np-nombre">Nombre</label>
               <input type="text" id="np-nombre" maxlength="40" placeholder="Ej: Baccarat Rouge 540">
             </div>
-            <div class="admin-row">
+            <div class="admin-row cols3">
               <div class="admin-field">
                 <label for="np-tipo">Tipo</label>
                 <select id="np-tipo" style="width:100%;padding:10px 14px;border:1px solid var(--line-2);border-radius:10px;background:var(--surface);color:var(--text);font:400 .92rem var(--sans);">
@@ -432,6 +432,24 @@
               <div class="admin-field">
                 <label for="np-presentacion">Presentación (tamaño)</label>
                 <input type="text" id="np-presentacion" maxlength="30" placeholder="100 ml">
+              </div>
+              <div class="admin-field">
+                <label for="np-combo-nombre">Combo del mes (opcional)</label>
+                <select id="np-combo-nombre" style="width:100%;padding:10px 14px;border:1px solid var(--line-2);border-radius:10px;background:var(--surface);color:var(--text);font:400 .92rem var(--sans);">
+                  <option value="">Sin combo</option>
+                  <option value="Enero">Enero</option>
+                  <option value="Febrero">Febrero</option>
+                  <option value="Marzo">Marzo</option>
+                  <option value="Abril">Abril</option>
+                  <option value="Mayo">Mayo</option>
+                  <option value="Junio">Junio</option>
+                  <option value="Julio">Julio</option>
+                  <option value="Agosto">Agosto</option>
+                  <option value="Septiembre">Septiembre</option>
+                  <option value="Octubre">Octubre</option>
+                  <option value="Noviembre">Noviembre</option>
+                  <option value="Diciembre">Diciembre</option>
+                </select>
               </div>
             </div>
             <div class="admin-field">
@@ -455,10 +473,6 @@
             <div class="admin-field">
               <label for="np-fondo">Notas de fondo</label>
               <input type="text" id="np-fondo" placeholder="Vainilla, Pachulí">
-            </div>
-            <div class="admin-field">
-              <label for="np-combo-nombre">Combo (opcional) — déjalo vacío si es catálogo normal</label>
-              <input type="text" id="np-combo-nombre" maxlength="30" placeholder="Ej: Octubre, Noviembre, Black Friday">
             </div>
             <div class="admin-field">
               <label>Fotos y videos del producto (puedes agregar varios)</label>

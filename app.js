@@ -34,11 +34,22 @@
   var search = '';
 
   // Filtros de combo — chips dinámicos según los combo_nombre del catálogo.
-  // comboLabel: si el admin escribe "Octubre" → chip "Combo Octubre";
-  // si escribe "Combo Xiembra" (empieza con "combo") se usa tal cual.
+  // comboLabel: si el combo es "Octubre" → chip "Combo Octubre";
+  // si ya empieza con "combo" se usa tal cual.
+  var MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   function comboLabel(nombre) {
     var n = String(nombre || '').trim();
     return /^combo\b/i.test(n) ? n : 'Combo ' + n;
+  }
+  // Un combo solo está activo en SU mes: "Septiembre" desaparece del
+  // catálogo en octubre (caducado), y "Noviembre" no aparece hasta que
+  // llegue noviembre — pedido del dueño: que el filtro no quede viejo.
+  function comboActivo(nombre) {
+    var n = String(nombre || '').trim().toLowerCase();
+    if (!n) return false;
+    var mesActual = MESES[new Date().getMonth()].toLowerCase();
+    return n === mesActual || n === 'combo ' + mesActual;
   }
 
   // Paginación del catálogo
@@ -246,10 +257,10 @@
   function renderFilters() {
     var fbox = $('filters');
     fbox.textContent = '';
-    // Chips de combo: uno por cada combo_nombre único presente en el catálogo
+    // Chips de combo: solo los combos activos DEL MES EN CURSO
     var combos = [];
     DATA.forEach(function (p) {
-      if (p.comboNombre && combos.indexOf(p.comboNombre) === -1) combos.push(p.comboNombre);
+      if (p.comboNombre && comboActivo(p.comboNombre) && combos.indexOf(p.comboNombre) === -1) combos.push(p.comboNombre);
     });
     var comboChips = combos.map(comboLabel);
     ['Todos', 'Hombre', 'Mujer', 'Unisex'].concat(comboChips).forEach(function (f) {
@@ -283,11 +294,11 @@
     var visible = DATA.filter(function (p) {
       var comboChips = [];
       DATA.forEach(function (p) {
-        if (p.comboNombre && comboChips.indexOf(comboLabel(p.comboNombre)) === -1) comboChips.push(comboLabel(p.comboNombre));
+        if (p.comboNombre && comboActivo(p.comboNombre) && comboChips.indexOf(comboLabel(p.comboNombre)) === -1) comboChips.push(comboLabel(p.comboNombre));
       });
       if (comboChips.indexOf(active) !== -1) {
-        // Filtro activo = un combo con nombre
-        if (!p.comboNombre || comboLabel(p.comboNombre) !== active) return false;
+        // Filtro activo = el combo del mes en curso
+        if (!p.comboNombre || !comboActivo(p.comboNombre) || comboLabel(p.comboNombre) !== active) return false;
       } else if (active !== 'Todos' && p.t !== active) return false;
       if (q && p.n.toLowerCase().indexOf(q) === -1) return false;
       return true;
@@ -316,7 +327,7 @@
       var wrap = el('div', 'bottle-wrap');
       var tagRow = el('div', 'tag-row');
       tagRow.appendChild(el('span', 'tag cat-' + p.t.toLowerCase(), p.t));
-      if (p.comboNombre) tagRow.appendChild(el('span', 'tag combo-badge', 'Combo'));
+      if (p.comboNombre && comboActivo(p.comboNombre)) tagRow.appendChild(el('span', 'tag combo-badge', 'Combo'));
       wrap.appendChild(tagRow);
 
       var cover = getCover(p);
@@ -1032,7 +1043,19 @@
     $('np-salida').value = (p.a || []).join(', ');
     $('np-corazon').value = (p.b || []).join(', ');
     $('np-fondo').value = (p.c || []).join(', ');
-    if ($('np-combo-nombre')) $('np-combo-nombre').value = p.comboNombre || '';
+    if ($('np-combo-nombre')) {
+      var sel = $('np-combo-nombre');
+      sel.value = p.comboNombre || '';
+      // Si el valor guardado no está en el listado de meses (dato viejo),
+      // crear la opción para no perderlo al guardar.
+      if (p.comboNombre && sel.value !== p.comboNombre) {
+        var o = document.createElement('option');
+        o.value = p.comboNombre;
+        o.textContent = p.comboNombre;
+        o.selected = true;
+        sel.appendChild(o);
+      }
+    }
     editingMediaFiles = [];
     renderEditingMediaPreview();
     $('np-save').textContent = 'Guardar cambios';
