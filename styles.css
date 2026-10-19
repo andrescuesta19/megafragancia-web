@@ -946,9 +946,10 @@ footer {
   overflow: hidden;
 }
 .cart-drawer.on { transform: none; visibility: visible; }
-/* Estilo POS: "Mi carrito" arriba-izquierda, X en la esquina derecha */
+/* Header fijo arriba (los productos scrollean por debajo sin taparse) */
+.cart-drawer .dlg-head { flex-shrink: 0; position: relative; z-index: 3; background: var(--surface); }
+/* Estilo POS: "Mi carrito" a la izquierda, X en la esquina derecha */
 .cart-drawer .dlg-head {
-  flex-shrink: 0;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
@@ -956,17 +957,31 @@ footer {
 }
 .cart-drawer .dlg-head h3 { font-size: 1.05rem; font-weight: 600; color: var(--text); margin: 0; }
 .cart-drawer .dlg-head .x { flex-shrink: 0; }
+/* Lista: scroll propio con altura real (antes max-height:60vh descuadraba) */
+.cart-drawer .dlg-body { flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; padding: 6px 18px 10px; }
+/* Pie vertical (antes era una fila: total + WhatsApp + Seguir viendo en línea) */
+.cart-drawer .dlg-foot {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 16px 18px;
+  background: var(--surface);
+}
+.cart-drawer .dlg-foot .btn { flex: none; width: 100%; text-align: center; }
+/* Fila "Total ......... 300.000" como en el POS */
+.cart-drawer .cart-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  border: none;
+  font: 500 .95rem var(--sans);
+  color: var(--text-2);
+}
+.cart-drawer .cart-total strong { font: 700 1.3rem var(--sans); color: var(--gold); }
 .cart-drawer .dlg-body { flex: 1; overflow-y: auto; }
 .cart-drawer .dlg-foot { flex-shrink: 0; }
-/* Total siempre visible al pie del carrito */
-.cart-total {
-  font: 700 1.15rem var(--sans);
-  color: var(--text);
-  text-align: right;
-  margin: 0 0 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line-2);
-}
 
 /* ===================== TOAST "Agregado al carrito" ===================== */
 /* Notificación que aparece al añadir y se oculta sola (~2.6s). */

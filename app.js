@@ -694,7 +694,8 @@
       });
     }
 
-    csum.textContent = u ? ('Total: ' + fmt(total)) : 'Total: 0';
+    // Pie del drawer: solo el valor, al lado de la etiqueta "Total" (estilo POS)
+    csum.textContent = fmt(total);
 
     var wa = $('wa');
     if (isValidWhatsApp(WHATSAPP)) {
