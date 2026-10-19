@@ -625,10 +625,6 @@
     var cc = $('cc');
     var clist = $('clist');
     var csum = $('csum');
-    var obar = $('orderbar');
-    var oCount = $('obar-count');
-    var oSub = $('obar-sub');
-    var oBtn = $('obar-btn');
 
     var validIds = {};
     DATA.forEach(function (p) { validIds[p.id] = p; });
@@ -650,8 +646,6 @@
     });
 
     cc.textContent = u;
-    oCount.textContent = u ? ('Total: ' + fmt(total)) : 'Total: 0';
-    oSub.textContent = '';
 
     clist.textContent = '';
     var ids = Object.keys(cart);
@@ -714,9 +708,6 @@
       wa.removeAttribute('href');
       wa.setAttribute('aria-disabled', 'true');
     }
-    oBtn.setAttribute('aria-disabled', u ? 'false' : 'true');
-    if (u > 0) obar.classList.add('on'); else obar.classList.remove('on');
-
     // Mantener el botón del modal de detalle sincronizado si está abierto
     updateDpAdd();
   }
@@ -825,10 +816,9 @@
   }
 
   document.addEventListener('click', function (e) {
-    var t = e.target.closest && e.target.closest('#wa, #obar-btn');
+    var t = e.target.closest && e.target.closest('#wa');
     if (!t) return;
     if (t.getAttribute('aria-disabled') === 'true') e.preventDefault();
-    if (t.id === 'obar-btn') openCart();
   });
   $('cartbtn').addEventListener('click', openCart);
   $('cart-bg').addEventListener('click', closeCart);

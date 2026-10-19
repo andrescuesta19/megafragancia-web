@@ -908,38 +908,7 @@ footer {
   .foot-cols { grid-template-columns: 1fr; gap: 28px; }
 }
 
-/* ===================== BARRA FLOTANTE DEL CARRITO ===================== */
-.order {
-  position: fixed;
-  left: 50%;
-  transform: translate(-50%, 140%);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 90px);
-  z-index: 30;
-  width: min(600px, calc(100% - 28px));
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 14px 14px 14px 22px;
-  border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--line-2);
-  box-shadow: var(--shadow-lg);
-  transition: transform .35s cubic-bezier(.4, 0, .2, 1), opacity .25s;
-  opacity: 0;
-}
-.order.on { transform: translate(-50%, 0); opacity: 1; }
-.order-info strong {
-  display: block;
-  font: 600 .95rem var(--sans);
-  color: var(--text);
-}
-.order-info small {
-  display: block;
-  font: 500 .8rem var(--sans);
-  color: var(--muted);
-  margin-top: 2px;
-}
+/* Barra flotante del carrito eliminada (el toast + el drawer la reemplazan) */
 
 /* ===================== CARRITO DRAWER (lateral derecho) ===================== */
 /* El carrito ya no es un modal centrado: se desliza desde la derecha
@@ -977,10 +946,10 @@ footer {
   overflow: hidden;
 }
 .cart-drawer.on { transform: none; visibility: visible; }
-.cart-drawer .dlg-head { flex-shrink: 0; }
-/* "Mi carrito" alineado a la derecha (junto a la lista) y X a la izquierda */
-.cart-drawer .dlg-head { flex-direction: row-reverse; justify-content: space-between; align-items: center; }
-.cart-drawer .dlg-head h3 { font-size: .92rem; font-weight: 600; color: var(--text); }
+/* "Mi carrito" y la X juntos, alineados a la derecha */
+.cart-drawer .dlg-head { flex-shrink: 0; justify-content: flex-end; gap: 10px; align-items: center; }
+.cart-drawer .dlg-head h3 { font-size: .92rem; font-weight: 600; color: var(--text); margin: 0; order: 1; }
+.cart-drawer .dlg-head .x { order: 2; flex-shrink: 0; }
 .cart-drawer .dlg-body { flex: 1; overflow-y: auto; }
 .cart-drawer .dlg-foot { flex-shrink: 0; }
 /* Total siempre visible al pie del carrito */
