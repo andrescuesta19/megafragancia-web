@@ -1,5 +1,5 @@
 /* ==========================================================
-   Mega Fragancia — Frontend conectado al backend
+   CJP Watch — Frontend conectado al backend
    ========================================================== */
 
 (function () {
@@ -715,7 +715,7 @@
         var p = validIds[id];
         return '- ' + cart[id] + ' x ' + (p ? p.n : '?');
       }).join('\n');
-      var msg = 'Hola, Mega Fragancia 👋\nQuiero hacer este pedido:\n' + (lines || '(sin productos)') +
+      var msg = 'Hola, CJP Watch 👋\nQuiero hacer este pedido:\n' + (lines || '(sin productos)') +
         (combos ? '\n\nCombos 2×' + fmt(COMBO_PRECIO) + ': ' + combos : '') +
         '\n\n¿Confirman disponibilidad, envío y forma de pago?';
       if (msg.length > 800) msg = msg.slice(0, 790) + '...';
@@ -744,18 +744,18 @@
     var fab = $('wa-fab');
     if (!fab) return;
     if (isValidWhatsApp(WHATSAPP)) {
-      fab.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, Mega Fragancia.');
+      fab.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, CJP Watch.');
       fab.removeAttribute('aria-disabled');
     } else { fab.removeAttribute('href'); }
   }
 
   var heroWa = $('hero-wa');
   if (heroWa && isValidWhatsApp(WHATSAPP)) {
-    heroWa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, Mega Fragancia.');
+    heroWa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, CJP Watch.');
   }
   var nosotrosWa = $('nosotros-wa');
   if (nosotrosWa && isValidWhatsApp(WHATSAPP)) {
-    nosotrosWa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, Mega Fragancia.');
+    nosotrosWa.href = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola, CJP Watch.');
   }
 
   // ---------- Buscador ----------
