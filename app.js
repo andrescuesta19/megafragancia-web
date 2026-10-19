@@ -673,7 +673,11 @@
           mini.style.background = 'linear-gradient(160deg, hsl(' + p.h + ', 35%, 70%) 0%, hsl(' + p.h + ', 28%, 45%) 100%)';
         }
         left.appendChild(mini);
-        left.appendChild(el('span', '', p.n));
+        // Nombre (hasta 2 líneas) + precio unitario debajo — estilo POS
+        var info = el('div', 'crow-info');
+        info.appendChild(el('span', 'crow-n', p.n));
+        if (p.precio > 0) info.appendChild(el('span', 'crow-p', fmt(p.precio)));
+        left.appendChild(info);
         r.appendChild(left);
 
         var q = el('div', 'q');

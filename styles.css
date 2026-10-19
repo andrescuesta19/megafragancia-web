@@ -946,10 +946,16 @@ footer {
   overflow: hidden;
 }
 .cart-drawer.on { transform: none; visibility: visible; }
-/* "Mi carrito" y la X juntos, alineados a la derecha */
-.cart-drawer .dlg-head { flex-shrink: 0; justify-content: flex-end; gap: 10px; align-items: center; }
-.cart-drawer .dlg-head h3 { font-size: .92rem; font-weight: 600; color: var(--text); margin: 0; order: 1; }
-.cart-drawer .dlg-head .x { order: 2; flex-shrink: 0; }
+/* Estilo POS: "Mi carrito" arriba-izquierda, X en la esquina derecha */
+.cart-drawer .dlg-head {
+  flex-shrink: 0;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+}
+.cart-drawer .dlg-head h3 { font-size: 1.05rem; font-weight: 600; color: var(--text); margin: 0; }
+.cart-drawer .dlg-head .x { flex-shrink: 0; }
 .cart-drawer .dlg-body { flex: 1; overflow-y: auto; }
 .cart-drawer .dlg-foot { flex-shrink: 0; }
 /* Total siempre visible al pie del carrito */
@@ -1120,33 +1126,47 @@ dialog::backdrop {
   font: 500 .92rem var(--sans);
 }
 
+/* Filas estilo POS: miniatura + (nombre hasta 2 líneas + precio) + controles */
 .crow {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--line);
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line-2);
 }
 .crow:last-child { border-bottom: 0; }
 .crow .name { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
 .crow .name .mini {
-  width: 44px; height: 44px;
+  width: 50px; height: 50px;
   border-radius: 10px;
   background: var(--bg-2);
   border: 1px solid var(--line);
   flex-shrink: 0;
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.crow .name .mini img { width: 100%; height: 100%; object-fit: cover; }
-.crow .name span {
+.crow .name .mini img { width: 100%; height: 100%; object-fit: contain; }
+.crow .name .mini video { width: 100%; height: 100%; object-fit: cover; }
+.crow-info { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
+.crow-n {
   color: var(--text);
   font-weight: 500;
+  font-size: .88rem;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.crow .q { display: flex; align-items: center; gap: 6px; }
+.crow-p {
+  color: var(--gold);
+  font-weight: 700;
+  font-size: .85rem;
+}
+.crow .q { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .crow .q button {
   width: 30px; height: 30px;
   border-radius: 50%;
@@ -1155,8 +1175,11 @@ dialog::backdrop {
   color: var(--text);
   cursor: pointer;
   font-size: 1rem;
-  font-weight: 600;
-  transition: all .2s;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .15s;
 }
 .crow .q button:hover { background: var(--gold); border-color: var(--gold); color: #fff; }
 .crow .q .num { min-width: 28px; text-align: center; font-weight: 600; }
