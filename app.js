@@ -1130,6 +1130,10 @@
     showExportFeedback('np-feedback', '⏳ Subiendo...');
     var reSave = false;
     try {
+      // Capturar ANTES del POST: si era edición, tras guardar se mantiene
+      // el form abierto (si no, resetEditForm() lo vaciaba todo y el usuario
+      // veía "desaparecían" sus fotos recién subidas).
+      var eraEdicion = !!editingProductId;
       var res = editingProductId
         ? await apiPutMultipart('/api/admin/productos/' + editingProductId, fd)
         : await apiPostMultipart('/api/admin/productos', fd);
@@ -1161,7 +1165,24 @@
         // campos presentes) — se re-guarda de inmediato con ese lote.
         reSave = true;
         showExportFeedback('np-feedback', '⏳ Subiendo fotos adicionales...');
+      } else if (eraEdicion) {
+        // Edición: NO vaciar el form. Refrescar las fotos desde el servidor
+        // (lo que subió pasa a "✓ Subida", lo que quitó ya no aparece) y
+        // dejar que el usuario siga trabajando en el mismo producto.
+        var actual = null;
+        for (var di = 0; di < DATA.length; di++) {
+          if (DATA[di].id === editingProductId) { actual = DATA[di]; break; }
+        }
+        if (actual) {
+          editingExistingMedia = (actual.media || []).map(function (m) {
+            return { id: m.id, url: m.url, tipo: m.tipo || 'imagen' };
+          });
+          editingMediaToRemove = [];
+          renderEditingMediaPreview();
+        }
+        showExportFeedback('np-feedback', '✓ Guardado — puedes seguir editando');
       } else {
+        // Producto nuevo: limpiar el form para agregar el siguiente.
         resetEditForm();
         showExportFeedback('np-feedback', '✓ Producto guardado');
       }
