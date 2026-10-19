@@ -1697,6 +1697,9 @@ dialog::backdrop {
   text-transform: uppercase;
   letter-spacing: .05em;
 }
+/* Fotos ya subidas al producto (editando) — verde para diferenciarlas
+   de las que aún no se han subido */
+.admin-gallery-preview .preview-item .badge-saved { background: var(--ok, #3d9a6c); }
 
 /* Galería del producto en el modal de detalle */
 .product-gallery {

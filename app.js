@@ -61,7 +61,8 @@
   var authToken = null;
   var editingProductId = null;
   var editingMediaFiles = []; // archivos pendientes en el form (File objects)
-  var editingExistingMedia = []; // media existente cuando se edita
+  var editingExistingMedia = []; // media existente del producto en edición
+  var editingMediaToRemove = []; // ids de media existente marcada con ✕ para borrar
 
   // Carrito (local)
   var cart = loadCart();
@@ -985,11 +986,14 @@
     var prev = $('np-preview');
     if (!prev) return;
     prev.textContent = '';
-    if (!editingMediaFiles.length) {
-      prev.textContent = 'Sin archivos seleccionados';
+
+    if (!editingMediaFiles.length && !editingExistingMedia.length) {
+      prev.textContent = 'Sin archivos';
       return;
     }
-    editingMediaFiles.forEach(function (m, idx) {
+
+    // 1) Fotos ya subidas del producto (visibles al editar, con ✕ para borrar)
+    editingExistingMedia.forEach(function (m, idx) {
       var item = el('div', 'preview-item');
       if (m.tipo === 'video') {
         var v = document.createElement('video');
@@ -1000,17 +1004,42 @@
         img.src = m.url;
         item.appendChild(img);
       }
-      var badge = el('span', 'badge', m.tipo === 'video' ? '▶ Video' : '📷 Foto');
-      item.appendChild(badge);
+      item.appendChild(el('span', 'badge badge-saved', '✓ Subida'));
       var rm = el('button', 'remove', '×');
       rm.type = 'button';
+      rm.title = 'Quitar esta foto del producto';
       rm.addEventListener('click', function (e) {
+        e.preventDefault();
+        editingMediaToRemove.push(m.id);
+        editingExistingMedia.splice(idx, 1);
+        renderEditingMediaPreview();
+      });
+      item.appendChild(rm);
+      prev.appendChild(item);
+    });
+
+    // 2) Archivos nuevos seleccionados (aún no subidos)
+    editingMediaFiles.forEach(function (m, idx) {
+      var item = el('div', 'preview-item');
+      if (m.tipo === 'video') {
+        var v2 = document.createElement('video');
+        v2.src = m.url; v2.muted = true;
+        item.appendChild(v2);
+      } else {
+        var img2 = document.createElement('img');
+        img2.src = m.url;
+        item.appendChild(img2);
+      }
+      item.appendChild(el('span', 'badge', m.tipo === 'video' ? '▶ Video' : '📷 Foto'));
+      var rm2 = el('button', 'remove', '×');
+      rm2.type = 'button';
+      rm2.addEventListener('click', function (e) {
         e.preventDefault();
         URL.revokeObjectURL(editingMediaFiles[idx].url);
         editingMediaFiles.splice(idx, 1);
         renderEditingMediaPreview();
       });
-      item.appendChild(rm);
+      item.appendChild(rm2);
       prev.appendChild(item);
     });
   }
@@ -1018,6 +1047,8 @@
   function resetEditForm() {
     editingMediaFiles.forEach(function (m) { URL.revokeObjectURL(m.url); });
     editingMediaFiles = [];
+    editingExistingMedia = [];
+    editingMediaToRemove = [];
     editingProductId = null;
     $('np-nombre').value = '';
     $('np-tipo').value = 'Unisex';
@@ -1056,7 +1087,12 @@
         sel.appendChild(o);
       }
     }
+    // Cargar las fotos existentes al preview (bugfix: antes no se mostraban)
     editingMediaFiles = [];
+    editingExistingMedia = (p.media || []).map(function (m) {
+      return { id: m.id, url: m.url, tipo: m.tipo || 'imagen' };
+    });
+    editingMediaToRemove = [];
     renderEditingMediaPreview();
     $('np-save').textContent = 'Guardar cambios';
     $('np-cancel').style.display = '';
@@ -1102,6 +1138,16 @@
       // Si era producto nuevo, anclar el id para que el re-save haga PUT
       // (no POST) y no duplique el producto
       if (!editingProductId && res.id) editingProductId = res.id;
+
+      // Borrar de la BD y del storage las fotos marcadas con ✕ en el form
+      if (editingProductId && editingMediaToRemove.length) {
+        var quitar = editingMediaToRemove;
+        editingMediaToRemove = [];
+        for (var qi = 0; qi < quitar.length; qi++) {
+          try { await apiDeleteAuth('/api/admin/productos/' + editingProductId + '/media/' + quitar[qi]); }
+          catch (delErr) { console.warn('No se pudo borrar media', quitar[qi], delErr); }
+        }
+      }
 
       await loadAll();
       renderPromo();
