@@ -1793,8 +1793,8 @@ dialog::backdrop {
   aspect-ratio: 1;
   border-radius: 4px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--line-2);
+  background: rgba(16, 34, 52, .06);
 }
 .card .bottle-wrap .gallery-thumb img,
 .card .bottle-wrap .gallery-thumb video {
