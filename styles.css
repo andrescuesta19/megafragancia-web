@@ -978,8 +978,20 @@ footer {
 }
 .cart-drawer.on { transform: none; visibility: visible; }
 .cart-drawer .dlg-head { flex-shrink: 0; }
+/* "Mi carrito" alineado a la derecha (junto a la lista) y X a la izquierda */
+.cart-drawer .dlg-head { flex-direction: row-reverse; justify-content: space-between; align-items: center; }
+.cart-drawer .dlg-head h3 { font-size: .92rem; font-weight: 600; color: var(--text); }
 .cart-drawer .dlg-body { flex: 1; overflow-y: auto; }
 .cart-drawer .dlg-foot { flex-shrink: 0; }
+/* Total siempre visible al pie del carrito */
+.cart-total {
+  font: 700 1.15rem var(--sans);
+  color: var(--text);
+  text-align: right;
+  margin: 0 0 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-2);
+}
 
 /* ===================== TOAST "Agregado al carrito" ===================== */
 /* Notificación que aparece al añadir y se oculta sola (~2.6s). */

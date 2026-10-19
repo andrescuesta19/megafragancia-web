@@ -625,8 +625,6 @@
     var cc = $('cc');
     var clist = $('clist');
     var csum = $('csum');
-    var chint = $('chint');
-    var wa = $('wa');
     var obar = $('orderbar');
     var oCount = $('obar-count');
     var oSub = $('obar-sub');
@@ -641,14 +639,19 @@
     if (changed) saveCart();
 
     var u = Object.values(cart).reduce(function (a, b) { return a + b; }, 0);
-    var combos = Math.floor(u / 2);
-    var rem = u % 2;
+    var combos = Math.floor(u / 2); // solo para el mensaje de WhatsApp al vendedor
+
+    // Total simple: suma de precio × cantidad. Sin desglose de combos —
+    // cada cliente sabe lo que lleva (pedido explícito del dueño).
+    var total = 0;
+    Object.keys(cart).forEach(function (k) {
+      var pp = validIds[k];
+      if (pp) total += (pp.precio || 0) * cart[k];
+    });
 
     cc.textContent = u;
-    oCount.textContent = u + (u === 1 ? ' fragancia' : ' fragancias');
-    oSub.textContent = rem
-      ? 'Te falta 1 para otro combo · ' + combos + (combos === 1 ? ' combo activo' : ' combos activos')
-      : (combos ? combos + ' × ' + fmt(COMBO_PRECIO) + ' = ' + fmt(combos * COMBO_PRECIO) : 'Agrega 2 fragancias para el combo 2×' + fmt(COMBO_PRECIO));
+    oCount.textContent = u ? ('Total: ' + fmt(total)) : 'Total: 0';
+    oSub.textContent = '';
 
     clist.textContent = '';
     var ids = Object.keys(cart);
@@ -693,9 +696,9 @@
       });
     }
 
-    csum.textContent = combos ? combos + ' × ' + fmt(COMBO_PRECIO) + ' = ' + fmt(combos * COMBO_PRECIO) : '';
-    chint.textContent = rem ? 'Te falta 1 fragancia para otro combo.' : '';
+    csum.textContent = u ? ('Total: ' + fmt(total)) : 'Total: 0';
 
+    var wa = $('wa');
     if (isValidWhatsApp(WHATSAPP)) {
       var lines = ids.map(function (id) {
         var p = validIds[id];

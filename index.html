@@ -260,8 +260,8 @@
   <!-- ============ BARRA FLOTANTE DEL CARRITO ============ -->
   <div class="order" id="orderbar" role="region" aria-label="Carrito de compras">
     <div class="order-info">
-      <strong id="obar-count" aria-live="polite">0 fragancias</strong>
-      <small id="obar-sub">Agrega 2 para activar el combo 2× 300.000</small>
+      <strong id="obar-count" aria-live="polite">Total: 0</strong>
+      <small id="obar-sub" hidden></small>
     </div>
     <button class="btn small" id="obar-btn" type="button" aria-disabled="true">Ver carrito</button>
   </div>
@@ -277,7 +277,7 @@
   <div id="cart-bg" class="cart-bg"></div>
   <aside id="dcart" class="cart-drawer" aria-labelledby="dcart-title">
     <header class="dlg-head">
-      <h3 id="dcart-title">Tu carrito</h3>
+      <h3 id="dcart-title">Mi carrito</h3>
       <button class="x" data-close-cart type="button" aria-label="Cerrar carrito">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -286,10 +286,9 @@
     </header>
     <div class="dlg-body">
       <div id="clist" class="cart-list"></div>
-      <p id="csum" class="cart-sum"></p>
-      <p id="chint" class="cart-hint"></p>
     </div>
     <div class="dlg-foot">
+      <p id="csum" class="cart-total">Total: 0</p>
       <a class="btn" id="wa" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">Pedir por WhatsApp</a>
       <button class="btn ghost" data-close-cart type="button">Seguir viendo</button>
     </div>
